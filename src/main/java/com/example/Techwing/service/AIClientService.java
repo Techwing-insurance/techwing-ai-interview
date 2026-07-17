@@ -103,6 +103,24 @@ public class AIClientService {
         }
     }
 
+    public JsonNode generateTechnicalQuestions(String roleName, java.util.List<String> resumeSkills, int count) {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("role_name", roleName);
+            payload.put("resume_skills", resumeSkills);
+            payload.put("count", count);
+
+            HttpHeaders headers = jsonHeaders();
+            HttpEntity<String> req = new HttpEntity<>(objectMapper.writeValueAsString(payload), headers);
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    aiBaseUrl + "/ai/technical/generate-questions", HttpMethod.POST, req, JsonNode.class);
+            return resp.getBody();
+        } catch (Exception e) {
+            log.error("Technical question generation failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
     // ─── HR EVALUATION ────────────────────────────────────────────────────────
 
     public JsonNode evaluateHRAnswer(String questionText, String transcript) {

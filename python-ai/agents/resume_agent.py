@@ -1,10 +1,10 @@
-﻿"""
+"""
 Resume Agent — extracts skills, projects, experience from PDF text using LLM.
 """
 import json
 import re
 from config import get_llm
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 RESUME_PROMPT = ChatPromptTemplate.from_template("""

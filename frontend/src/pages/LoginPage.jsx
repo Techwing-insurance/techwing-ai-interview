@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Mail, Lock, Loader2 } from 'lucide-react';
 
 const LoginPage = () => {
-    const [formData, setFormData] = useState({ email: '', pin: '' });
+    const [formData, setFormData] = useState({ email: '', password: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const { login } = useAuth();
@@ -50,19 +50,16 @@ const LoginPage = () => {
                     </div>
                     
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">6-Digit PIN</label>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                             <input 
                                 type="password" 
                                 required
-                                maxLength="6"
-                                minLength="6"
-                                pattern="\d{6}"
                                 className="input-field pl-10" 
-                                placeholder="123456"
-                                value={formData.pin}
-                                onChange={e => setFormData({...formData, pin: e.target.value})}
+                                placeholder="Enter password"
+                                value={formData.password}
+                                onChange={e => setFormData({...formData, password: e.target.value})}
                             />
                         </div>
                     </div>

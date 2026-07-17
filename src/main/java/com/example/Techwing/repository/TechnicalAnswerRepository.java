@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface TechnicalAnswerRepository extends JpaRepository<TechnicalAnswer, Long> {
     List<TechnicalAnswer> findBySessionIdOrderByQuestionOrder(Long sessionId);
     Optional<TechnicalAnswer> findTopBySessionIdOrderByQuestionOrderDesc(Long sessionId);
+    Optional<TechnicalAnswer> findBySessionIdAndQuestionOrder(Long sessionId, Integer questionOrder);
+    List<TechnicalAnswer> findBySessionIdAndTranscriptIsNullOrderByQuestionOrderAsc(Long sessionId);
 
     @Query("SELECT AVG(a.score) FROM TechnicalAnswer a WHERE a.session.id = :sessionId AND a.score IS NOT NULL")
     Double findAverageScoreBySessionId(Long sessionId);

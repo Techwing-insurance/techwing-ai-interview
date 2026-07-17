@@ -24,8 +24,8 @@ public class User {
     @Column(nullable = false, unique = true, length = 150)
     private String email;
 
-    @Column(name = "pin_hash", nullable = false)
-    private String pinHash;
+    @Column(name = "password_hash", nullable = false)
+    private String passwordHash;
 
     @Column(length = 100)
     private String branch;

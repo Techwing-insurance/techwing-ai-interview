@@ -13,10 +13,8 @@ public class RegisterRequest {
     @Email(message = "Invalid email format")
     private String email;
 
-    @NotBlank(message = "PIN is required")
-    @Size(min = 6, max = 6, message = "PIN must be exactly 6 digits")
-    @Pattern(regexp = "\\d{6}", message = "PIN must be 6 numeric digits")
-    private String pin;
+    @NotBlank(message = "Password is required")
+    private String password;
 
     private String branch;
     private String phone;
@@ -24,4 +22,6 @@ public class RegisterRequest {
 
     @NotNull(message = "Track ID is required")
     private Long trackId;
+
+    private String role;
 }

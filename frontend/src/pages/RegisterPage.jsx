@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { User, Mail, Lock, Loader2 } from 'lucide-react';
 
 const RegisterPage = () => {
-    const [formData, setFormData] = useState({ name: '', email: '', pin: '', role: 'USER', branch: 'Computer Science', phone: '0000000000', college: 'TechWing University', trackId: 1 });
+    const [formData, setFormData] = useState({ name: '', email: '', password: '', branch: 'Computer Science', phone: '0000000000', college: 'TechWing University', trackId: 1 });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const { register } = useAuth();
@@ -65,19 +65,17 @@ const RegisterPage = () => {
                     </div>
                     
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">6-Digit PIN</label>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                             <input 
                                 type="password" 
                                 required
-                                maxLength="6"
                                 minLength="6"
-                                pattern="\d{6}"
                                 className="input-field pl-10" 
-                                placeholder="123456"
-                                value={formData.pin}
-                                onChange={e => setFormData({...formData, pin: e.target.value})}
+                                placeholder="Enter password"
+                                value={formData.password}
+                                onChange={e => setFormData({...formData, password: e.target.value})}
                             />
                         </div>
                     </div>

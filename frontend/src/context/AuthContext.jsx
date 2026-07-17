@@ -43,11 +43,10 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (data) => {
         const res = await authService.login(data);
-        // Backend wraps in ApiResponse<AuthResponse>: { success, message, data: { userId, name, ... } }
         const authData = res.data?.data;
         if (authData && authData.accessToken) {
             saveAuth(authData);
-            navigate("/dashboard");
+            navigate(authData.role === 'ADMIN' ? "/admin" : "/dashboard");
         } else {
             throw new Error(res.data?.message || "Login failed");
         }
@@ -58,7 +57,7 @@ export const AuthProvider = ({ children }) => {
         const authData = res.data?.data;
         if (authData && authData.accessToken) {
             saveAuth(authData);
-            navigate("/dashboard");
+            navigate(authData.role === 'ADMIN' ? "/admin" : "/dashboard");
         } else {
             throw new Error(res.data?.message || "Registration failed");
         }

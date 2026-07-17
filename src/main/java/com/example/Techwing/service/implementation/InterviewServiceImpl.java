@@ -11,7 +11,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import com.example.Techwing.service.AIClientService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +32,8 @@ public class InterviewServiceImpl implements InterviewService {
     private final UserRepository userRepository;
     private final InterviewConfigurationRepository configRepository;
     private final ResumeRepository resumeRepository;
+    private final ResumeAnalysisRepository resumeAnalysisRepository;
+    private final AIClientService aiClientService;
 
     // ─── TECHNICAL ROUND ──────────────────────────────────────────────────────
 
@@ -36,11 +43,15 @@ public class InterviewServiceImpl implements InterviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
         // Check if there is already an active session
-        sessionRepository.findTopByUserIdOrderByCreatedAtDesc(userId).ifPresent(s -> {
+        Optional<InterviewSession> activeSessionOpt = sessionRepository.findTopByUserIdOrderByCreatedAtDesc(userId);
+        if (activeSessionOpt.isPresent()) {
+            InterviewSession s = activeSessionOpt.get();
             if (s.getStatus() != SessionStatus.COMPLETED && s.getStatus() != SessionStatus.ABANDONED) {
-                throw new InterviewException("You already have an active interview session: " + s.getId());
+                log.info("Abandoning previous incomplete session: {}", s.getId());
+                s.setStatus(SessionStatus.ABANDONED);
+                sessionRepository.save(s);
             }
-        });
+        }
 
         // fallback: get first active config
         InterviewConfiguration config = configRepository.findAll().stream()
@@ -56,23 +67,77 @@ public class InterviewServiceImpl implements InterviewService {
                 .build();
         session = sessionRepository.save(session);
 
-        List<TechnicalQuestion> questions = technicalQuestionRepository
-                .findByTrackIdAndIsActiveTrue(config.getTrack().getId());
-        if (questions.isEmpty())
-            throw new InterviewException("No questions available for this track");
+        // Fetch resume analysis to get skills
+        List<String> skills = new ArrayList<>();
+        resumeAnalysisRepository.findByUserId(userId).ifPresent(analysis -> {
+            try {
+                if (analysis.getSkills() != null) {
+                    JsonNode skillsNode = new ObjectMapper().readTree(analysis.getSkills());
+                    if (skillsNode.isArray()) {
+                        for (JsonNode node : skillsNode) skills.add(node.asText());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse skills from resume analysis", e);
+            }
+        });
 
-        TechnicalQuestion firstQ = questions.get(0);
-        TechnicalAnswer answer = TechnicalAnswer.builder()
-                .session(session)
-                .question(firstQ)
-                .questionOrder(1)
-                .build();
-        technicalAnswerRepository.save(answer);
+        // Force exactly 10 questions: 5 from resume, 5 from role
+        int qCount = 10;
+        List<TechnicalQuestion> sessionQuestions = new ArrayList<>();
+        JsonNode aiQuestions = aiClientService.generateTechnicalQuestions(config.getTrack().getName(), skills, qCount);
+        
+        if (aiQuestions != null && aiQuestions.isArray()) {
+            for (JsonNode qNode : aiQuestions) {
+                Difficulty diff = Difficulty.MEDIUM;
+                try {
+                    diff = Difficulty.valueOf(qNode.path("difficulty").asText("MEDIUM").toUpperCase());
+                } catch (Exception ignored) {}
+                
+                String cat = qNode.path("category").asText("TECHNICAL");
+                if (cat.length() > 90) cat = cat.substring(0, 90);
+
+                TechnicalQuestion q = TechnicalQuestion.builder()
+                        .track(config.getTrack())
+                        .questionText(qNode.path("question_text").asText("Explain this concept"))
+                        .expectedAnswer(qNode.path("expected_answer").asText("A reasonable technical answer"))
+                        .difficulty(diff)
+                        .category(cat)
+                        .isActive(true)
+                        .build();
+                q = technicalQuestionRepository.save(q);
+                sessionQuestions.add(q);
+            }
+        } else {
+            // Fallback to static if AI fails
+            sessionQuestions = technicalQuestionRepository.findByTrackIdAndIsActiveTrue(config.getTrack().getId());
+        }
+
+        if (sessionQuestions.isEmpty()) {
+            throw new InterviewException("No questions available for this track and AI generation failed");
+        }
+        
+        // Ensure we only have up to qCount questions
+        if (sessionQuestions.size() > qCount) {
+            sessionQuestions = sessionQuestions.subList(0, qCount);
+        }
+
+        // Pre-create answers for the session so we can fetch them sequentially
+        for (int i = 0; i < sessionQuestions.size(); i++) {
+            TechnicalAnswer answer = TechnicalAnswer.builder()
+                    .session(session)
+                    .question(sessionQuestions.get(i))
+                    .questionOrder(i + 1)
+                    .build();
+            technicalAnswerRepository.save(answer);
+        }
+
+        TechnicalQuestion firstQ = sessionQuestions.get(0);
 
         log.info("Technical round started for user: {} session: {}", userId, session.getId());
         return InterviewStartResponse.builder()
                 .sessionId(session.getId())
-                .totalQuestions(Math.min(questions.size(), config.getTechnicalQuestionCount()))
+                .totalQuestions(sessionQuestions.size())
                 .timeLimitMinutes(config.getTechnicalTimeMinutes())
                 .questionId(firstQ.getId())
                 .questionOrder(1)
@@ -82,31 +147,72 @@ public class InterviewServiceImpl implements InterviewService {
                 .build();
     }
 
+    private InterviewStartResponse resumeTechnicalRound(InterviewSession session) {
+        List<TechnicalAnswer> pendingAnswers = technicalAnswerRepository.findBySessionIdAndTranscriptIsNullOrderByQuestionOrderAsc(session.getId());
+        
+        if (pendingAnswers.isEmpty()) {
+            throw new InterviewException("Technical round is already completed for this session.");
+        }
+
+        TechnicalAnswer nextAnswer = pendingAnswers.get(0);
+        TechnicalQuestion nextQ = nextAnswer.getQuestion();
+        
+        log.info("Resuming technical round for session: {}", session.getId());
+        return InterviewStartResponse.builder()
+                .sessionId(session.getId())
+                .totalQuestions(10)
+                .timeLimitMinutes(session.getConfig().getTechnicalTimeMinutes())
+                .questionId(nextQ.getId())
+                .questionOrder(nextAnswer.getQuestionOrder())
+                .questionText(nextQ.getQuestionText())
+                .category(nextQ.getCategory())
+                .difficulty(nextQ.getDifficulty().name())
+                .build();
+    }
+
     @Override
     public AnswerEvalResponse submitTechnicalAnswer(AnswerRequest request) {
         InterviewSession session = sessionRepository.findById(request.getSessionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", request.getSessionId()));
 
         TechnicalAnswer answer = technicalAnswerRepository
-                .findTopBySessionIdOrderByQuestionOrderDesc(request.getSessionId())
-                .orElseThrow(() -> new ResourceNotFoundException("TechnicalAnswer", "sessionId", request.getSessionId()));
+                .findBySessionIdAndQuestionOrder(request.getSessionId(), request.getQuestionOrder())
+                .orElseThrow(() -> new ResourceNotFoundException("TechnicalAnswer", "sessionId/questionOrder", request.getSessionId()));
 
         answer.setTranscript(request.getTranscript());
         answer.setAudioS3Url(request.getAudioS3Url());
         answer.setAnsweredAt(LocalDateTime.now());
 
-        // TODO: Call Python AI service for evaluation
-        // Mock evaluation
-        double mockScore = 7.5 + java.util.concurrent.ThreadLocalRandom.current().nextDouble() * 2.5;
+        // Call Python AI service for evaluation
+        double mockScore = 5.0; // fallback
+        String aiFeedback = "Answer recorded.";
+        
+        JsonNode aiResponse = aiClientService.evaluateTechnicalAnswer(
+                answer.getQuestion().getQuestionText(),
+                answer.getQuestion().getExpectedAnswer(),
+                request.getTranscript(),
+                session.getTrack().getName()
+        );
+        
+        if (aiResponse != null) {
+            try {
+                mockScore = aiResponse.get("score").asDouble();
+                answer.setAccuracyScore(aiResponse.get("accuracy_score").asDouble());
+                answer.setDepthScore(aiResponse.get("depth_score").asDouble());
+                answer.setCommunicationScore(aiResponse.get("communication_score").asDouble());
+                aiFeedback = aiResponse.get("feedback").asText();
+            } catch (Exception e) {
+                log.warn("Failed to parse AI evaluation response", e);
+            }
+        }
+        
         answer.setScore(mockScore);
-        answer.setAccuracyScore(mockScore * 0.5);
-        answer.setDepthScore(mockScore * 0.3);
-        answer.setCommunicationScore(mockScore * 0.2);
-        answer.setAiFeedback("Good explanation. Could elaborate more on the internals.");
+        answer.setAiFeedback(aiFeedback);
         technicalAnswerRepository.save(answer);
 
-        long answered = technicalAnswerRepository.countBySessionId(session.getId());
-        int total = session.getConfig().getTechnicalQuestionCount();
+        long answered = technicalAnswerRepository.findBySessionIdOrderByQuestionOrder(session.getId())
+                .stream().filter(a -> a.getTranscript() != null).count();
+        int total = 10; // Forced total from startTechnicalRound
         boolean hasNext = answered < total;
 
         log.info("Technical answer submitted for session: {} order: {}", request.getSessionId(), request.getQuestionOrder());
@@ -125,30 +231,25 @@ public class InterviewServiceImpl implements InterviewService {
         InterviewSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
 
-        long answered = technicalAnswerRepository.countBySessionId(sessionId);
+        long answeredCount = technicalAnswerRepository.countBySessionId(sessionId) 
+                             - technicalAnswerRepository.findBySessionIdAndTranscriptIsNullOrderByQuestionOrderAsc(sessionId).size();
+        
+        List<TechnicalAnswer> pendingAnswers = technicalAnswerRepository.findBySessionIdAndTranscriptIsNullOrderByQuestionOrderAsc(sessionId);
+        
+        if (pendingAnswers.isEmpty()) throw new InterviewException("All questions have been answered");
+
+        TechnicalAnswer nextAnswer = pendingAnswers.get(0);
+        TechnicalQuestion nextQ = nextAnswer.getQuestion();
+        
         int total = session.getConfig().getTechnicalQuestionCount();
-        if (answered >= total) throw new InterviewException("All questions have been answered");
-
-        List<TechnicalQuestion> questions = technicalQuestionRepository
-                .findByTrackIdAndIsActiveTrue(session.getTrack().getId());
-
-        if (answered >= questions.size()) throw new InterviewException("No more questions available");
-        TechnicalQuestion nextQ = questions.get((int) answered);
-
-        TechnicalAnswer nextAnswer = TechnicalAnswer.builder()
-                .session(session)
-                .question(nextQ)
-                .questionOrder((int) answered + 1)
-                .build();
-        technicalAnswerRepository.save(nextAnswer);
 
         return QuestionResponse.builder()
                 .questionId(nextQ.getId())
-                .order((int) answered + 1)
+                .order(nextAnswer.getQuestionOrder())
                 .questionText(nextQ.getQuestionText())
                 .category(nextQ.getCategory())
                 .difficulty(nextQ.getDifficulty().name())
-                .hasNext(answered + 1 < total)
+                .hasNext(pendingAnswers.size() > 1)
                 .totalQuestions(total)
                 .build();
     }

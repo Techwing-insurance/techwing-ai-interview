@@ -1,10 +1,10 @@
-﻿"""
+"""
 Coding Feedback Agent — analyzes code quality and provides optimization suggestions.
 """
 import json
 import re
 from config import get_llm
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 CODING_PROMPT = ChatPromptTemplate.from_template("""

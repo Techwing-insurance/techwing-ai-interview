@@ -29,6 +29,10 @@ public class ResumeServiceImpl implements ResumeService {
     private final AIClientService aiClientService;
     private final ObjectMapper objectMapper;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private ResumeService self;
+
     @Override
     public Resume uploadResume(Long userId, MultipartFile file) {
         if (file.isEmpty()) throw new FileUploadException("File is empty");
@@ -52,9 +56,6 @@ public class ResumeServiceImpl implements ResumeService {
         if (resumeRepository.existsByUserId(userId)) {
             resume = resumeRepository.findByUserId(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("Resume", "userId", userId));
-            // Delete old analysis if re-uploading
-            resumeAnalysisRepository.findByUserId(userId)
-                    .ifPresent(resumeAnalysisRepository::delete);
         } else {
             resume = Resume.builder().user(user).build();
         }
@@ -68,7 +69,9 @@ public class ResumeServiceImpl implements ResumeService {
         resume = resumeRepository.save(resume);
 
         log.info("Resume stored in DB for userId: {}, filename: {}", userId, resume.getFileName());
-        triggerAnalysis(resume.getId());
+        
+        self.triggerAnalysis(resume.getId());
+        
         return resume;
     }
 
@@ -81,9 +84,10 @@ public class ResumeServiceImpl implements ResumeService {
             resume.setStatus(ResumeStatus.ANALYZING);
             resumeRepository.save(resume);
 
-            // Call Python AI Service with userId and name for context
+            // Call Python AI Service with download URL, userId and name for context
+            String downloadUrl = "http://localhost:8080/api/resume/download/" + resume.getUser().getId();
             JsonNode aiResult = aiClientService.analyzeResume(
-                    null, // no s3 URL anymore, AI service receives PDF via different route
+                    downloadUrl,
                     resume.getUser().getId(),
                     resume.getUser().getName()
             );
@@ -109,17 +113,19 @@ public class ResumeServiceImpl implements ResumeService {
                 summary        = "Final year CSE student with Java and Spring Boot background.";
             }
 
-            ResumeAnalysis analysis = ResumeAnalysis.builder()
-                    .resume(resume)
-                    .user(resume.getUser())
-                    .skills(skills)
-                    .projects(projects)
-                    .education(education)
-                    .certifications(certifications)
-                    .experienceYears(experienceYears)
-                    .summary(summary)
-                    .aiRawResponse(aiResult != null ? aiResult.toString() : null)
-                    .build();
+            ResumeAnalysis analysis = resumeAnalysisRepository.findByResumeId(resume.getId())
+                    .orElseGet(() -> ResumeAnalysis.builder()
+                            .resume(resume)
+                            .user(resume.getUser())
+                            .build());
+
+            analysis.setSkills(skills);
+            analysis.setProjects(projects);
+            analysis.setEducation(education);
+            analysis.setCertifications(certifications);
+            analysis.setExperienceYears(experienceYears);
+            analysis.setSummary(summary);
+            analysis.setAiRawResponse(aiResult != null ? aiResult.toString() : null);
 
             resumeAnalysisRepository.save(analysis);
             resume.setStatus(ResumeStatus.ANALYZED);

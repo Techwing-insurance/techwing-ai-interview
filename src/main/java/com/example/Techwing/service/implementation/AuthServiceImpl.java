@@ -55,7 +55,7 @@ public class AuthServiceImpl implements AuthService {
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
-                .pinHash(passwordEncoder.encode(request.getPin()))
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .branch(request.getBranch())
                 .phone(request.getPhone())
                 .college(request.getCollege())
@@ -69,7 +69,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPin()));
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", request.getEmail()));
         log.info("User logged in: {}", user.getEmail());

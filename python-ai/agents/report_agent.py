@@ -1,10 +1,10 @@
-﻿"""
+"""
 Report Agent — generates final assessment report with strengths, weaknesses, roadmap.
 """
 import json
 import re
 from config import get_llm
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 REPORT_PROMPT = ChatPromptTemplate.from_template("""

@@ -1,9 +1,21 @@
-﻿from fastapi import APIRouter, HTTPException, UploadFile, File
-from models.schemas import TechnicalEvalRequest, TechnicalEvalResponse, STTResponse
-from agents.technical_agent import evaluate_answer
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from models.schemas import TechnicalEvalRequest, TechnicalEvalResponse, STTResponse, QuestionGenerateRequest, QuestionGenerateResponse
+from agents.technical_agent import evaluate_answer, generate_technical_questions
 from services.stt_service import transcribe_audio
 
 router = APIRouter(prefix="/ai/technical", tags=["Technical AI"])
+
+@router.post("/generate-questions", response_model=QuestionGenerateResponse)
+async def generate_questions(request: QuestionGenerateRequest):
+    try:
+        questions = generate_technical_questions(
+            role_name=request.role_name,
+            resume_skills=request.resume_skills,
+            count=request.count
+        )
+        return QuestionGenerateResponse(questions=questions)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Question generation failed: {str(e)}")
 
 @router.post("/evaluate", response_model=TechnicalEvalResponse)
 async def evaluate(request: TechnicalEvalRequest):

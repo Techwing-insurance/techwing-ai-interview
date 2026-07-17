@@ -7,6 +7,8 @@ import com.example.Techwing.payload.CodeRunRequest;
 import com.example.Techwing.payload.CodeRunResponse;
 import com.example.Techwing.repository.*;
 import com.example.Techwing.service.CodingService;
+import com.example.Techwing.service.AIClientService;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,7 @@ public class CodingServiceImpl implements CodingService {
     private final CodingSubmissionRepository submissionRepository;
     private final InterviewSessionRepository sessionRepository;
     private final UserRepository userRepository;
+    private final AIClientService aiClientService;
 
     @Override
     public List<CodingProblem> startCodingRound(Long userId) {
@@ -99,15 +102,31 @@ public class CodingServiceImpl implements CodingService {
         CodingProblem problem = problemRepository.findById(request.getProblemId())
                 .orElseThrow(() -> new ResourceNotFoundException("Problem", "id", request.getProblemId()));
 
-        // TODO: Call Judge0 API with all hidden test cases
-        int totalCases = 10;
-        int passedCases = 8; // Mock result
-        int score = (passedCases * 100) / totalCases;
+        // TODO: Call actual code execution sandbox (Judge0). 
+        // For now, we simulate execution and focus on AI static analysis.
+        int totalCases = problem.getSampleInput() != null ? 5 : 0;
+        int passedCases = totalCases > 0 ? totalCases - 1 : 0; // Mock 4/5 passed
+        int score = totalCases > 0 ? (passedCases * 100) / totalCases : 0;
         SubmissionStatus status = passedCases == totalCases ? SubmissionStatus.ACCEPTED : SubmissionStatus.WRONG_ANSWER;
 
-        String aiFeedback = passedCases == totalCases
-                ? "All test cases passed! Consider optimizing the time complexity from O(n^2) to O(n) using a HashMap."
-                : "8/10 test cases passed. Review edge cases for empty input and duplicate elements.";
+        String aiFeedback = "Code submitted. Analysis unavailable.";
+        
+        // Call Python AI for real feedback
+        JsonNode aiResponse = aiClientService.getCodingFeedback(
+            request.getCode(),
+            request.getLanguage().name(),
+            problem.getDescription(),
+            passedCases,
+            totalCases
+        );
+        
+        if (aiResponse != null && aiResponse.has("feedback")) {
+            aiFeedback = aiResponse.get("feedback").asText();
+            if (aiResponse.has("score")) {
+                // You could optionally override the strict test-case score with AI score
+                // score = aiResponse.get("score").asInt(); 
+            }
+        }
 
         CodingSubmission submission = CodingSubmission.builder()
                 .session(session)

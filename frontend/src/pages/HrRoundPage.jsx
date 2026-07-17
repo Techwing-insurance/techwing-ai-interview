@@ -1,7 +1,7 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoiceAvatar from '../components/VoiceAvatar';
-import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
+import { useVAD } from '../hooks/useVAD';
 import * as interviewService from '../services/interviewService';
 import { useInterview } from '../context/InterviewContext';
 import { Loader2 } from 'lucide-react';
@@ -9,11 +9,65 @@ import { Loader2 } from 'lucide-react';
 const HrRoundPage = () => {
     const navigate = useNavigate();
     const { setSessionId, setCurrentRound } = useInterview();
-    const { isRecording, startRecording, stopRecording } = useVoiceRecorder();
+    const [isProcessing, setIsProcessing] = useState(false);
+    
+    const handleSpeechEnd = async (audioBlob) => {
+        if (!audioBlob) return;
+        setIsProcessing(true);
+
+        try {
+            // 1. Send Audio to Whisper for Transcription
+            const audioFormData = new FormData();
+            audioFormData.append('audio', audioBlob, 'answer.webm');
+            
+            let userTranscript = "Transcription skipped / fallback.";
+            try {
+                const transcribeRes = await interviewService.transcribeVoice(audioFormData, 'HR');
+                userTranscript = transcribeRes.data;
+            } catch (e) {
+                console.warn("Transcription failed, using fallback text.", e);
+            }
+
+            setTranscript(userTranscript);
+
+            // 2. Send JSON payload to Backend
+            const payload = {
+                sessionId: sessionData?.sessionId,
+                questionOrder: question?.order,
+                transcript: userTranscript
+            };
+
+            const res = await interviewService.answerHrQuestion(payload);
+            const evalData = res.data.data;
+            
+            setFeedback(evalData.feedback);
+            
+            // 3. Process Next or Complete
+            if (evalData.nextAvailable) {
+                setTimeout(() => {
+                    if (sessionData?.sessionId) fetchNextQuestion(sessionData.sessionId);
+                }, 4000);
+            } else {
+                setTimeout(() => {
+                    alert("Interview Complete! Generating Report...");
+                    navigate('/report');
+                }, 4000);
+            }
+
+        } catch (err) {
+            console.error('Error submitting answer', err);
+            alert('Error processing your answer');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const { isRecording, startRecording, stopRecording, volume } = useVAD({
+        onSpeechEnd: handleSpeechEnd
+    });
     
     const [sessionData, setSessionData] = useState(null);
     const [question, setQuestion] = useState(null);
-    const [isProcessing, setIsProcessing] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [feedback, setFeedback] = useState('');
@@ -57,57 +111,8 @@ const HrRoundPage = () => {
         startRecording();
     };
 
-    const handleStopRecording = async () => {
-        const audioBlob = await stopRecording();
-        if (!audioBlob) return;
-
-        setIsProcessing(true);
-
-        try {
-            // 1. Send Audio to Whisper for Transcription
-            const audioFormData = new FormData();
-            audioFormData.append('audio', audioBlob, 'answer.webm');
-            
-            let userTranscript = "Transcription skipped / fallback.";
-            try {
-                const transcribeRes = await interviewService.transcribeVoice(audioFormData, 'HR');
-                userTranscript = transcribeRes.data;
-            } catch (e) {
-                console.warn("Transcription failed, using fallback text.", e);
-            }
-
-            setTranscript(userTranscript);
-
-            // 2. Send JSON payload to Backend
-            const payload = {
-                sessionId: sessionData.sessionId,
-                questionOrder: question.order,
-                transcript: userTranscript
-            };
-
-            const res = await interviewService.answerHrQuestion(payload);
-            const evalData = res.data.data;
-            
-            setFeedback(evalData.feedback);
-            
-            // 3. Process Next or Complete
-            if (evalData.nextAvailable) {
-                setTimeout(() => {
-                    fetchNextQuestion(sessionData.sessionId);
-                }, 4000);
-            } else {
-                setTimeout(() => {
-                    alert("Interview Complete! Generating Report...");
-                    navigate('/report');
-                }, 4000);
-            }
-
-        } catch (err) {
-            console.error('Error submitting answer', err);
-            alert('Error processing your answer');
-        } finally {
-            setIsProcessing(false);
-        }
+    const handleStopRecording = () => {
+        stopRecording();
     };
 
     const fetchNextQuestion = async (sessionId) => {
@@ -152,6 +157,7 @@ const HrRoundPage = () => {
                         isListening={isRecording}
                         isSpeaking={isSpeaking}
                         isProcessing={isProcessing}
+                        volume={volume}
                         onStartListening={handleStartRecording}
                         onStopListening={handleStopRecording}
                     />

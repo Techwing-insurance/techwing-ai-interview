@@ -1,8 +1,11 @@
-﻿import React from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 
-const VoiceAvatar = ({ isListening, isSpeaking, isProcessing, onStartListening, onStopListening }) => {
+const VoiceAvatar = ({ isListening, isSpeaking, isProcessing, volume = 0, onStartListening, onStopListening }) => {
+    // Calculate scale based on volume (similar to ChatGPT voice orb)
+    const scale = isListening ? 1 + (volume / 160) * 0.35 : 1;
+
     return (
         <div className="flex flex-col items-center justify-center p-8">
             <div className="relative mb-8">
@@ -12,7 +15,9 @@ const VoiceAvatar = ({ isListening, isSpeaking, isProcessing, onStartListening, 
                 )}
                 
                 {/* Avatar Image container */}
-                <div className={`relative w-48 h-48 rounded-full overflow-hidden border-4 transition-colors duration-500 z-10 
+                <div 
+                    style={{ transform: `scale(${scale})`, transition: 'transform 0.05s ease-out' }}
+                    className={`relative w-48 h-48 rounded-full overflow-hidden border-4 z-10 
                     ${isListening ? 'border-techwing-orange' : isSpeaking ? 'border-techwing-gold' : 'border-white/10'}`}>
                     
                     <img 

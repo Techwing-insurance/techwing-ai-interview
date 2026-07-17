@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import * as interviewService from '../services/interviewService';
@@ -11,23 +11,25 @@ const DashboardPage = () => {
     const [uploading, setUploading] = useState(false);
     const [resumeUploaded, setResumeUploaded] = useState(false);
 
-    const handleFileChange = (e) => {
+    const handleFileChange = async (e) => {
         if (e.target.files && e.target.files[0]) {
-            setFile(e.target.files[0]);
+            const selectedFile = e.target.files[0];
+            setFile(selectedFile);
+            await uploadSelectedFile(selectedFile);
         }
     };
 
-    const handleUpload = async () => {
-        if (!file) return;
+    const uploadSelectedFile = async (fileToUpload) => {
         setUploading(true);
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', fileToUpload);
         try {
             await interviewService.uploadResume(formData);
             setResumeUploaded(true);
         } catch (error) {
             console.error('Upload failed', error);
             alert('Resume upload failed. Please try again.');
+            setFile(null); // Reset on failure
         } finally {
             setUploading(false);
         }
@@ -70,19 +72,15 @@ const DashboardPage = () => {
                                         accept=".pdf"
                                         className="hidden" 
                                         onChange={handleFileChange} 
+                                        disabled={uploading}
                                     />
-                                    <label htmlFor="resume" className="cursor-pointer flex flex-col items-center">
+                                    <label htmlFor="resume" className={`cursor-pointer flex flex-col items-center ${uploading ? 'opacity-50 cursor-wait' : ''}`}>
                                         <Upload className="w-8 h-8 text-techwing-gold mb-2" />
-                                        <span className="text-sm font-medium">{file ? file.name : 'Select PDF File'}</span>
+                                        <span className="text-sm font-medium">
+                                            {uploading ? 'Uploading & Analyzing...' : (file ? file.name : 'Select PDF File (Auto Upload)')}
+                                        </span>
                                     </label>
                                 </div>
-                                <button 
-                                    onClick={handleUpload} 
-                                    disabled={!file || uploading} 
-                                    className="btn-secondary w-full flex justify-center items-center gap-2"
-                                >
-                                    {uploading ? 'Uploading & Analyzing...' : 'Upload Resume'}
-                                </button>
                             </div>
                         ) : (
                             <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-xl flex items-center gap-3">

@@ -1,4 +1,4 @@
-﻿from pydantic import BaseModel
+from pydantic import BaseModel
 from typing import Optional, List
 
 # ── Resume ───────────────────────────────────────────────────────────────────
@@ -16,6 +16,20 @@ class ResumeAnalyzeResponse(BaseModel):
     summary: str
 
 # ── Technical ─────────────────────────────────────────────────────────────────
+class QuestionGenerateRequest(BaseModel):
+    role_name: str
+    resume_skills: List[str]
+    count: int = 5
+
+class GeneratedQuestion(BaseModel):
+    question_text: str
+    expected_answer: str
+    difficulty: str
+    category: str
+
+class QuestionGenerateResponse(BaseModel):
+    questions: List[GeneratedQuestion]
+
 class TechnicalEvalRequest(BaseModel):
     question_text: str
     expected_answer: str
