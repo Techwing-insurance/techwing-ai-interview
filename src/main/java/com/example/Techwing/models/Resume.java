@@ -22,11 +22,16 @@ public class Resume {
     @ToString.Exclude
     private User user;
 
-    @Column(name = "s3_url", nullable = false, length = 1000)
-    private String s3Url;
+    @Lob
+    @Column(name = "file_data", columnDefinition = "LONGBLOB")
+    @ToString.Exclude
+    private byte[] fileData;
 
     @Column(name = "file_name", length = 255)
     private String fileName;
+
+    @Column(name = "content_type", length = 100)
+    private String contentType;
 
     @Column(name = "file_size_kb")
     private Integer fileSizeKb;

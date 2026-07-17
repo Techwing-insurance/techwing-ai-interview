@@ -32,7 +32,8 @@ public class ResumeServiceImpl implements ResumeService {
     @Override
     public Resume uploadResume(Long userId, MultipartFile file) {
         if (file.isEmpty()) throw new FileUploadException("File is empty");
-        if (!Objects.equals(file.getContentType(), "application/pdf"))
+        String ct = file.getContentType();
+        if (!("application/pdf".equals(ct) || "application/octet-stream".equals(ct)))
             throw new FileUploadException("Only PDF files are allowed");
         if (file.getSize() > 5 * 1024 * 1024)
             throw new FileUploadException("File size must not exceed 5MB");
@@ -40,30 +41,33 @@ public class ResumeServiceImpl implements ResumeService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        // TODO: Upload to AWS S3 in production
-        String s3Url = "https://techwings-resumes.s3.amazonaws.com/" + userId + "/" + file.getOriginalFilename();
+        byte[] fileBytes;
+        try {
+            fileBytes = file.getBytes();
+        } catch (Exception e) {
+            throw new FileUploadException("Failed to read file bytes: " + e.getMessage());
+        }
 
         Resume resume;
         if (resumeRepository.existsByUserId(userId)) {
             resume = resumeRepository.findByUserId(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("Resume", "userId", userId));
-            resume.setS3Url(s3Url);
-            resume.setFileName(file.getOriginalFilename());
-            resume.setFileSizeKb((int)(file.getSize() / 1024));
-            resume.setStatus(ResumeStatus.UPLOADED);
-            resume.setAnalyzedAt(null);
-            resumeAnalysisRepository.findByUserId(userId).ifPresent(a -> resumeAnalysisRepository.delete(a));
+            // Delete old analysis if re-uploading
+            resumeAnalysisRepository.findByUserId(userId)
+                    .ifPresent(resumeAnalysisRepository::delete);
         } else {
-            resume = Resume.builder()
-                    .user(user)
-                    .s3Url(s3Url)
-                    .fileName(file.getOriginalFilename())
-                    .fileSizeKb((int)(file.getSize() / 1024))
-                    .status(ResumeStatus.UPLOADED)
-                    .build();
+            resume = Resume.builder().user(user).build();
         }
+
+        resume.setFileData(fileBytes);
+        resume.setFileName(file.getOriginalFilename());
+        resume.setContentType(file.getContentType());
+        resume.setFileSizeKb((int)(file.getSize() / 1024));
+        resume.setStatus(ResumeStatus.UPLOADED);
+        resume.setAnalyzedAt(null);
         resume = resumeRepository.save(resume);
-        log.info("Resume uploaded for user: {} → {}", userId, s3Url);
+
+        log.info("Resume stored in DB for userId: {}, filename: {}", userId, resume.getFileName());
         triggerAnalysis(resume.getId());
         return resume;
     }
@@ -77,9 +81,9 @@ public class ResumeServiceImpl implements ResumeService {
             resume.setStatus(ResumeStatus.ANALYZING);
             resumeRepository.save(resume);
 
-            // ── Call Python AI Service ─────────────────────────────────────────
+            // Call Python AI Service with userId and name for context
             JsonNode aiResult = aiClientService.analyzeResume(
-                    resume.getS3Url(),
+                    null, // no s3 URL anymore, AI service receives PDF via different route
                     resume.getUser().getId(),
                     resume.getUser().getName()
             );
@@ -92,14 +96,14 @@ public class ResumeServiceImpl implements ResumeService {
                 projects       = aiResult.has("projects")       ? aiResult.get("projects").toString()       : "[]";
                 education      = aiResult.has("education")      ? aiResult.get("education").toString()      : "[]";
                 certifications = aiResult.has("certifications") ? aiResult.get("certifications").toString() : "[]";
-                experienceYears= aiResult.has("experience_years")? aiResult.get("experience_years").asDouble(0.0): 0.0;
+                experienceYears= aiResult.has("experience_years") ? aiResult.get("experience_years").asDouble(0.0) : 0.0;
                 summary        = aiResult.has("summary")        ? aiResult.get("summary").asText("") : "";
             } else {
-                // Fallback mock
+                // Fallback when AI service is offline
                 log.warn("AI service returned null, using fallback for resumeId: {}", resumeId);
                 skills         = "[\"Java\",\"Spring Boot\",\"MySQL\",\"React\"]";
                 projects       = "[{\"name\":\"AI Interview Platform\",\"description\":\"Final Year Project\",\"tech_stack\":[\"Java\",\"React\"]}]";
-                education      = "[{\"degree\":\"B.Tech CSE\",\"institution\":\"ABC Engineering\",\"year\":2025}]";
+                education      = "[{\"degree\":\"B.Tech CSE\",\"institution\":\"TechWing University\",\"year\":2025}]";
                 certifications = "[]";
                 experienceYears= 0.5;
                 summary        = "Final year CSE student with Java and Spring Boot background.";
@@ -143,7 +147,7 @@ public class ResumeServiceImpl implements ResumeService {
 
     @Override
     public String getResumePreviewUrl(Long userId) {
-        Resume resume = getResumeByUserId(userId);
-        return resume.getS3Url() + "?presigned=true&expiry=3600";
+        // With MySQL storage, the preview URL now points to our own download endpoint
+        return "/api/resume/download/" + userId;
     }
 }
