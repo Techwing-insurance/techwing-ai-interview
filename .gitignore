@@ -20,14 +20,3 @@ target/
 # OS
 .DS_Store
 Thumbs.db
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-python-ai/.env
-.env
-.venv/
-venv/
-env/
