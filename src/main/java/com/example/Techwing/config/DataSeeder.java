@@ -47,55 +47,74 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedTechnologyTracks() {
-        if (technologyTrackRepository.count() == 0) {
-            log.info("Seeding default Technology Tracks...");
-            
-            List<TechnologyTrack> defaultTracks = List.of(
-                TechnologyTrack.builder()
-                    .name("Java Full Stack")
-                    .description("Spring Boot backend with React/Angular frontend")
-                    .isActive(true)
-                    .build(),
-                TechnologyTrack.builder()
-                    .name("Python Data Science")
-                    .description("Data analysis, Machine Learning, and AI using Python")
-                    .isActive(true)
-                    .build(),
-                TechnologyTrack.builder()
-                    .name("MERN Stack")
-                    .description("MongoDB, Express, React, and Node.js web development")
-                    .isActive(true)
-                    .build(),
-                TechnologyTrack.builder()
-                    .name("Cloud & DevOps")
-                    .description("AWS, Docker, Kubernetes, and CI/CD pipelines")
-                    .isActive(true)
-                    .build()
-            );
-
-            technologyTrackRepository.saveAll(defaultTracks);
-            log.info("Successfully seeded 4 Technology Tracks.");
+        if (technologyTrackRepository.count() > 0) {
+            log.info("Technology tracks already exist, skipping seed.");
+            return;
         }
+        log.info("Seeding 5 Technology Tracks...");
+
+        List<TechnologyTrack> defaultTracks = List.of(
+            TechnologyTrack.builder()
+                .name("Java Full Stack Developer")
+                .description("Spring Boot + React + MySQL — Full-stack Java web development covering REST APIs, JPA/Hibernate, React frontend, and relational database design.")
+                .iconUrl("https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg")
+                .isActive(true)
+                .build(),
+
+            TechnologyTrack.builder()
+                .name("MERN Stack Developer")
+                .description("MongoDB + Express + React + Node.js — Full-stack JavaScript development covering REST APIs, NoSQL databases, React state management, and server-side Node.")
+                .iconUrl("https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mongodb/mongodb-original.svg")
+                .isActive(true)
+                .build(),
+
+            TechnologyTrack.builder()
+                .name("AWS Cloud Engineer")
+                .description("Amazon Web Services — Cloud infrastructure covering EC2, S3, RDS, Lambda, VPC, IAM, CloudFormation, and core AWS solution architecture.")
+                .iconUrl("https://cdn.jsdelivr.net/gh/devicons/devicon/icons/amazonwebservices/amazonwebservices-original-wordmark.svg")
+                .isActive(true)
+                .build(),
+
+            TechnologyTrack.builder()
+                .name("DevOps Engineer")
+                .description("Docker + Kubernetes + CI/CD — Infrastructure automation covering containerization, orchestration, Jenkins/GitHub Actions pipelines, monitoring, and IaC with Terraform.")
+                .iconUrl("https://cdn.jsdelivr.net/gh/devicons/devicon/icons/docker/docker-original.svg")
+                .isActive(true)
+                .build(),
+
+            TechnologyTrack.builder()
+                .name("Generative AI Engineer")
+                .description("LLMs + RAG + Agents — AI application development covering prompt engineering, LangChain, vector databases, fine-tuning, and production GenAI system design.")
+                .iconUrl("https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg")
+                .isActive(true)
+                .build()
+        );
+
+        technologyTrackRepository.saveAll(defaultTracks);
+        log.info("Successfully seeded 5 Technology Tracks.");
     }
 
     private void seedInterviewConfigurations() {
-        if (interviewConfigurationRepository.count() == 0) {
-            log.info("Seeding default Interview Configurations...");
-            List<TechnologyTrack> tracks = technologyTrackRepository.findAll();
-            for (TechnologyTrack track : tracks) {
-                InterviewConfiguration config = InterviewConfiguration.builder()
-                        .track(track)
-                        .technicalQuestionCount(10)
-                        .technicalTimeMinutes(25)
-                        .codingProblemCount(1)
-                        .codingTimeMinutes(30)
-                        .hrQuestionCount(3)
-                        .hrTimeMinutes(10)
-                        .isActive(true)
-                        .build();
-                interviewConfigurationRepository.save(config);
-            }
-            log.info("Successfully seeded Interview Configurations for all tracks.");
+        if (interviewConfigurationRepository.count() > 0) {
+            log.info("Interview configurations already exist, skipping seed.");
+            return;
         }
+        log.info("Seeding Interview Configurations for all 5 tracks...");
+
+        List<TechnologyTrack> tracks = technologyTrackRepository.findAll();
+        for (TechnologyTrack track : tracks) {
+            InterviewConfiguration config = InterviewConfiguration.builder()
+                    .track(track)
+                    .technicalQuestionCount(10)   // 5 resume-based + 5 role-based, AI generated
+                    .technicalTimeMinutes(25)
+                    .codingProblemCount(0)         // Coding round DISABLED
+                    .codingTimeMinutes(0)          // Coding round DISABLED
+                    .hrQuestionCount(5)
+                    .hrTimeMinutes(12)
+                    .isActive(true)
+                    .build();
+            interviewConfigurationRepository.save(config);
+        }
+        log.info("Successfully seeded Interview Configurations for all {} tracks.", tracks.size());
     }
 }

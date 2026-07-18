@@ -3,6 +3,8 @@ package com.example.Techwing.models;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 
 @Entity
@@ -20,6 +22,8 @@ public class InterviewConfiguration {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "track_id", nullable = false)
     @ToString.Exclude
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JsonIgnore // Ignore entirely to prevent circular references and proxy issues
     private TechnologyTrack track;
 
     @Column(name = "technical_question_count", nullable = false)

@@ -24,28 +24,87 @@ public class AdminController {
     private final CodingProblemRepository problemRepository;
     private final UserRepository userRepository;
     private final InterviewSessionRepository sessionRepository;
+    private final InterviewConfigurationRepository configRepository;
 
     @GetMapping("/tracks")
     public ResponseEntity<ApiResponse<List<TechnologyTrack>>> getTracks() {
         return ResponseEntity.ok(ApiResponse.success(trackRepository.findByIsActiveTrue()));
     }
 
+    @GetMapping("/tracks/{id}")
+    public ResponseEntity<ApiResponse<TechnologyTrack>> getTrack(@PathVariable Long id) {
+        TechnologyTrack track = trackRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("TechnologyTrack", "id", id));
+        return ResponseEntity.ok(ApiResponse.success(track));
+    }
+
     @PostMapping("/tracks")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<TechnologyTrack>> createTrack(@RequestBody TechnologyTrack track) {
         track.setIsActive(true);
+        TechnologyTrack savedTrack = trackRepository.save(track);
+        
+        // Auto-create a default Interview Configuration for the new track (Timer 5 mins)
+        InterviewConfiguration config = InterviewConfiguration.builder()
+                .track(savedTrack)
+                .technicalQuestionCount(10)
+                .technicalTimeMinutes(5) // Setting 5 minutes timer as requested
+                .codingProblemCount(0)
+                .codingTimeMinutes(0)
+                .hrQuestionCount(5)
+                .hrTimeMinutes(5)
+                .isActive(true)
+                .build();
+        configRepository.save(config);
+        
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Track created", trackRepository.save(track)));
+                .body(ApiResponse.success("Track created", savedTrack));
     }
 
     @PutMapping("/tracks/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<TechnologyTrack>> updateTrack(
             @PathVariable Long id, @RequestBody TechnologyTrack updated) {
-        TechnologyTrack t = trackRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Track", "id", id));
-        t.setName(updated.getName());
-        t.setDescription(updated.getDescription());
-        return ResponseEntity.ok(ApiResponse.success(trackRepository.save(t)));
+        TechnologyTrack track = trackRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("TechnologyTrack", "id", id));
+        track.setName(updated.getName());
+        track.setDescription(updated.getDescription());
+        track.setIconUrl(updated.getIconUrl());
+        return ResponseEntity.ok(ApiResponse.success("Track updated", trackRepository.save(track)));
+    }
+
+    @GetMapping("/tracks/{id}/config")
+    public ResponseEntity<ApiResponse<InterviewConfiguration>> getTrackConfig(@PathVariable Long id) {
+        InterviewConfiguration config = configRepository.findByTrackIdAndIsActiveTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("InterviewConfiguration", "trackId", id));
+        return ResponseEntity.ok(ApiResponse.success(config));
+    }
+
+    @PutMapping("/tracks/{id}/config")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<InterviewConfiguration>> updateTrackConfig(
+            @PathVariable Long id, @RequestBody InterviewConfiguration updated) {
+        InterviewConfiguration config = configRepository.findByTrackIdAndIsActiveTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("InterviewConfiguration", "trackId", id));
+        if (updated.getTechnicalTimeMinutes() != null) {
+            config.setTechnicalTimeMinutes(updated.getTechnicalTimeMinutes());
+        }
+        if (updated.getTechnicalQuestionCount() != null) {
+            config.setTechnicalQuestionCount(updated.getTechnicalQuestionCount());
+        }
+        if (updated.getHrTimeMinutes() != null) {
+            config.setHrTimeMinutes(updated.getHrTimeMinutes());
+        }
+        if (updated.getHrQuestionCount() != null) {
+            config.setHrQuestionCount(updated.getHrQuestionCount());
+        }
+        if (updated.getCodingTimeMinutes() != null) {
+            config.setCodingTimeMinutes(updated.getCodingTimeMinutes());
+        }
+        if (updated.getCodingProblemCount() != null) {
+            config.setCodingProblemCount(updated.getCodingProblemCount());
+        }
+        return ResponseEntity.ok(ApiResponse.success("Configuration updated", configRepository.save(config)));
     }
 
     @DeleteMapping("/tracks/{id}")
@@ -112,6 +171,42 @@ public class AdminController {
     @GetMapping("/students/{userId}/sessions")
     public ResponseEntity<ApiResponse<List<InterviewSession>>> getSessions(@PathVariable Long userId) {
         return ResponseEntity.ok(ApiResponse.success(sessionRepository.findByUserIdOrderByCreatedAtDesc(userId)));
+    }
+
+    @GetMapping("/students/performance")
+    public ResponseEntity<ApiResponse<List<com.example.Techwing.payload.StudentPerformanceDTO>>> getAllStudentsPerformance() {
+        List<User> students = userRepository.findAll().stream().filter(u -> u.getRole() == Role.STUDENT).toList();
+        List<com.example.Techwing.payload.StudentPerformanceDTO> dtos = students.stream().map(this::mapToPerformanceDTO).toList();
+        return ResponseEntity.ok(ApiResponse.success(dtos));
+    }
+
+    @GetMapping("/tracks/{trackId}/students/performance")
+    public ResponseEntity<ApiResponse<List<com.example.Techwing.payload.StudentPerformanceDTO>>> getTrackStudentsPerformance(@PathVariable Long trackId) {
+        List<User> students = userRepository.findAll().stream()
+                .filter(u -> u.getRole() == Role.STUDENT && u.getTrack() != null && u.getTrack().getId().equals(trackId))
+                .toList();
+        List<com.example.Techwing.payload.StudentPerformanceDTO> dtos = students.stream().map(this::mapToPerformanceDTO).toList();
+        return ResponseEntity.ok(ApiResponse.success(dtos));
+    }
+
+    private com.example.Techwing.payload.StudentPerformanceDTO mapToPerformanceDTO(User user) {
+        com.example.Techwing.payload.StudentPerformanceDTO dto = com.example.Techwing.payload.StudentPerformanceDTO.builder()
+                .userId(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .pinNumber(user.getPinNumber())
+                .year(user.getYear())
+                .branch(user.getBranch())
+                .college(user.getCollege())
+                .build();
+
+        sessionRepository.findTopByUserIdOrderByCreatedAtDesc(user.getId()).ifPresent(session -> {
+            dto.setLatestSessionId(session.getId());
+            dto.setTrackName(session.getTrack().getName());
+            dto.setOverallScore(session.getOverallScore());
+            dto.setInterviewDate(session.getCreatedAt());
+        });
+        return dto;
     }
 
     @PutMapping("/users/{id}/activate")

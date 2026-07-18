@@ -17,6 +17,13 @@ public class RegisterRequest {
     private String password;
 
     private String branch;
+    
+    @NotBlank(message = "Pin number (Roll number) is required")
+    private String pinNumber;
+    
+    @NotNull(message = "Year is required")
+    private Integer year;
+    
     private String phone;
     private String college;
 

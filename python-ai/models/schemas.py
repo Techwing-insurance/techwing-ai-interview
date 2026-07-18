@@ -19,7 +19,7 @@ class ResumeAnalyzeResponse(BaseModel):
 class QuestionGenerateRequest(BaseModel):
     role_name: str
     resume_skills: List[str]
-    count: int = 5
+    count: int = 10
 
 class GeneratedQuestion(BaseModel):
     question_text: str
@@ -105,4 +105,7 @@ class STTResponse(BaseModel):
 # ── TTS ───────────────────────────────────────────────────────────────────────
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = "nova"
+    # Default: professional female interviewer voice
+    # Options: "female" (Ava - warm), "male" (Andrew - authoritative),
+    #          "female_uk" (Sonia - British), "male_uk" (Ryan - British)
+    voice: Optional[str] = "female"

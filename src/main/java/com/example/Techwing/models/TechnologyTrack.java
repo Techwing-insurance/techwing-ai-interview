@@ -3,6 +3,8 @@ package com.example.Techwing.models;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 
 @Entity
@@ -33,6 +35,8 @@ public class TechnologyTrack {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     @ToString.Exclude
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JsonIgnore
     private User createdBy;
 
     @CreationTimestamp

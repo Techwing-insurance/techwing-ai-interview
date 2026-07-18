@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import * as interviewService from '../services/interviewService';
 import { Upload, Play, CheckCircle, FileText, Code, Users } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 const DashboardPage = () => {
     const { user, logout } = useAuth();
@@ -43,13 +44,31 @@ const DashboardPage = () => {
         navigate('/interview/technical');
     };
 
+    const handleLogout = () => {
+        Swal.fire({
+            title: 'Log out?',
+            text: "Are you sure you want to end your session?",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, logout',
+            background: '#1a1f2b',
+            color: '#fff'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                logout();
+            }
+        });
+    };
+
     return (
         <div className="min-h-screen bg-techwing-dark p-6">
             <header className="max-w-6xl mx-auto flex justify-between items-center py-6 mb-8 border-b border-white/10">
                 <img src="/src/assets/logo.png" alt="TechWing" className="h-10 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/150x50/0a0a0a/CAA928?text=TECHWING' }} />
                 <div className="flex items-center gap-6">
                     <span className="text-gray-300">Hello, <strong className="text-white">{user?.name}</strong></span>
-                    <button onClick={logout} className="text-sm text-gray-400 hover:text-white transition-colors">Logout</button>
+                    <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-white transition-colors">Logout</button>
                 </div>
             </header>
 
@@ -111,21 +130,11 @@ const DashboardPage = () => {
                             </div>
 
                             <div className="flex gap-4 items-start">
-                                <div className="bg-techwing-orange/20 p-3 rounded-lg text-techwing-orange mt-1">
-                                    <Code className="w-6 h-6" />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-bold mb-1">Round 2: Live Coding</h3>
-                                    <p className="text-gray-400">Data Structures and Algorithms round. Write and execute code in our embedded editor to pass test cases.</p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4 items-start">
                                 <div className="bg-blue-500/20 p-3 rounded-lg text-blue-400 mt-1">
                                     <Users className="w-6 h-6" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-bold mb-1">Round 3: HR Interview</h3>
+                                    <h3 className="text-xl font-bold mb-1">Round 2: HR Interview</h3>
                                     <p className="text-gray-400">Behavioral and situational questions assessing cultural fit and soft skills. Spoken interaction.</p>
                                 </div>
                             </div>

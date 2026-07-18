@@ -57,8 +57,11 @@ public class AuthServiceImpl implements AuthService {
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .branch(request.getBranch())
+                .pinNumber(request.getPinNumber())
+                .year(request.getYear())
                 .phone(request.getPhone())
                 .college(request.getCollege())
+                .track(track)
                 .build();
         user = userRepository.save(user);
         log.info("Registered new student: {}", user.getEmail());

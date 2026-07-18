@@ -1,14 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Lock, Loader2 } from 'lucide-react';
+import { User, Mail, Lock, Loader2, Eye, EyeOff, Hash, BookOpen, GraduationCap } from 'lucide-react';
+import axios from 'axios';
 
 const RegisterPage = () => {
-    const [formData, setFormData] = useState({ name: '', email: '', password: '', branch: 'Computer Science', phone: '0000000000', college: 'TechWing University', trackId: 1 });
+    const [formData, setFormData] = useState({ 
+        name: '', 
+        email: '', 
+        password: '', 
+        pinNumber: '',
+        year: 1,
+        branch: 'Computer Science', 
+        phone: '0000000000', 
+        college: 'TechWing University', 
+        trackId: '' 
+    });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [tracks, setTracks] = useState([]);
+    
     const { register } = useAuth();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchTracks = async () => {
+            try {
+                // Fetch tracks from public API via Vite proxy
+                const res = await axios.get('/api/public/tracks');
+                if (res.data.success && res.data.data.length > 0) {
+                    setTracks(res.data.data);
+                    // Default select the first track
+                    setFormData(prev => ({ ...prev, trackId: res.data.data[0].id }));
+                }
+            } catch (err) {
+                console.error("Failed to load tracks", err);
+            }
+        };
+        fetchTracks();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -41,8 +72,8 @@ const RegisterPage = () => {
                             <input 
                                 type="text" 
                                 required
-                                className="input-field pl-10" 
-                                placeholder="John Doe"
+                                className="input-field !pl-10" 
+                                placeholder="shanmukh"
                                 value={formData.name}
                                 onChange={e => setFormData({...formData, name: e.target.value})}
                             />
@@ -56,8 +87,8 @@ const RegisterPage = () => {
                             <input 
                                 type="email" 
                                 required
-                                className="input-field pl-10" 
-                                placeholder="john@example.com"
+                                className="input-field !pl-10" 
+                                placeholder="shanmukh@example.com"
                                 value={formData.email}
                                 onChange={e => setFormData({...formData, email: e.target.value})}
                             />
@@ -69,29 +100,98 @@ const RegisterPage = () => {
                         <div className="relative">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                             <input 
-                                type="password" 
+                                type={showPassword ? "text" : "password"}
                                 required
                                 minLength="6"
-                                className="input-field pl-10" 
+                                className="input-field !pl-10 pr-10" 
                                 placeholder="Enter password"
                                 value={formData.password}
                                 onChange={e => setFormData({...formData, password: e.target.value})}
                             />
+                            <button 
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                            >
+                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Roll Number (PIN)</label>
+                            <div className="relative">
+                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                                <input 
+                                    type="text" 
+                                    required
+                                    className="input-field !pl-10" 
+                                    placeholder="Enter Roll Number"
+                                    value={formData.pinNumber}
+                                    onChange={e => setFormData({...formData, pinNumber: e.target.value})}
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Year</label>
+                            <div className="relative">
+                                <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                                <select 
+                                    required
+                                    className="input-field !pl-10 appearance-none" 
+                                    value={formData.year}
+                                    onChange={e => setFormData({...formData, year: parseInt(e.target.value)})}
+                                >
+                                    <option value={1}>1st Year</option>
+                                    <option value={2}>2nd Year</option>
+                                    <option value={3}>3rd Year</option>
+                                    <option value={4}>4th Year</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Branch</label>
+                        <div className="relative">
+                            <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                            <select 
+                                required
+                                className="input-field !pl-10 appearance-none" 
+                                value={formData.branch}
+                                onChange={e => setFormData({...formData, branch: e.target.value})}
+                            >
+                                <option value="Computer Science">Computer Science & Engineering (CSE)</option>
+                                <option value="CSE - Data Science (CSD)">CSE - Data Science (CSD)</option>
+                                <option value="CSE - AI & ML (CSM)">CSE - AI & ML (CSM)</option>
+                                <option value="CSE - Cyber Security (CSC)">CSE - Cyber Security (CSC)</option>
+                                <option value="Information Technology">Information Technology</option>
+                                <option value="Electronics & Communication">Electronics & Communication</option>
+                                <option value="Electrical & Electronics">Electrical & Electronics</option>
+                                <option value="Mechanical Engineering">Mechanical Engineering</option>
+                                <option value="Civil Engineering">Civil Engineering</option>
+                            </select>
                         </div>
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">Technology Track</label>
-                        <select 
-                            required
-                            className="input-field" 
-                            value={formData.trackId}
-                            onChange={e => setFormData({...formData, trackId: parseInt(e.target.value)})}
-                        >
-                            <option value={1}>Java Full Stack</option>
-                            <option value={2}>Python Data Science</option>
-                            <option value={3}>Frontend React</option>
-                        </select>
+                        <div className="relative">
+                            <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                            <select 
+                                required
+                                className="input-field !pl-10 appearance-none" 
+                                value={formData.trackId}
+                                onChange={e => setFormData({...formData, trackId: parseInt(e.target.value)})}
+                            >
+                                {tracks.length === 0 && <option value="" disabled>Loading tracks...</option>}
+                                {tracks.map(track => (
+                                    <option key={track.id} value={track.id}>{track.name}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     <button type="submit" disabled={loading} className="btn-primary w-full flex justify-center mt-6">

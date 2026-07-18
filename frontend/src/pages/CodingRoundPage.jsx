@@ -1,7 +1,8 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { Play, Check, ArrowRight, Loader2 } from 'lucide-react';
+import TechWingLoader from '../components/TechWingLoader';
 import * as codingService from '../services/codingService';
 import { useInterview } from '../context/InterviewContext';
 
@@ -82,10 +83,10 @@ const CodingRoundPage = () => {
         }
     };
 
-    if (!problem) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-techwing-dark flex items-center justify-center">
-                <Loader2 className="w-12 h-12 text-techwing-gold animate-spin" />
+                <TechWingLoader text="Preparing Coding Environment..." />
             </div>
         );
     }

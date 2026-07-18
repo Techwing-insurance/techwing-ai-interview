@@ -1,8 +1,9 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as interviewService from '../services/interviewService';
 import { useInterview } from '../context/InterviewContext';
 import { Loader2, Download, Home, Star, FileText, Code, Users } from 'lucide-react';
+import TechWingLoader from '../components/TechWingLoader';
 
 const ReportPage = () => {
     const navigate = useNavigate();
@@ -36,10 +37,9 @@ const ReportPage = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-techwing-dark flex flex-col items-center justify-center space-y-6">
-                <Loader2 className="w-16 h-16 text-techwing-gold animate-spin" />
-                <h2 className="text-2xl font-bold text-white">Analyzing Your Interview...</h2>
-                <p className="text-gray-400">Our AI is generating your comprehensive report and personalized roadmap.</p>
+            <div className="min-h-screen bg-techwing-dark flex flex-col items-center justify-center">
+                <TechWingLoader text="Analyzing Your Interview..." />
+                <p className="text-gray-400 mt-2 text-center">Our AI is generating your comprehensive report<br/>and personalized roadmap.</p>
             </div>
         );
     }

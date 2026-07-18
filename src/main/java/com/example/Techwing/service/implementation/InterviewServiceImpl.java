@@ -53,14 +53,21 @@ public class InterviewServiceImpl implements InterviewService {
             }
         }
 
-        // fallback: get first active config
-        InterviewConfiguration config = configRepository.findAll().stream()
-                .filter(InterviewConfiguration::getIsActive).findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("InterviewConfiguration", "active", "true"));
+        // Fetch the configuration for the user's track
+        InterviewConfiguration config = null;
+        if (user.getTrack() != null) {
+            config = configRepository.findByTrackIdAndIsActiveTrue(user.getTrack().getId()).orElse(null);
+        }
+        // Fallback if no specific config exists
+        if (config == null) {
+            config = configRepository.findAll().stream()
+                    .filter(InterviewConfiguration::getIsActive).findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("InterviewConfiguration", "active", "true"));
+        }
 
         InterviewSession session = InterviewSession.builder()
                 .user(user)
-                .track(config.getTrack())
+                .track(user.getTrack() != null ? user.getTrack() : config.getTrack())
                 .config(config)
                 .status(SessionStatus.TECHNICAL_IN_PROGRESS)
                 .startedAt(LocalDateTime.now())
@@ -87,8 +94,8 @@ public class InterviewServiceImpl implements InterviewService {
         List<TechnicalQuestion> sessionQuestions = new ArrayList<>();
         JsonNode aiQuestions = aiClientService.generateTechnicalQuestions(config.getTrack().getName(), skills, qCount);
         
-        if (aiQuestions != null && aiQuestions.isArray()) {
-            for (JsonNode qNode : aiQuestions) {
+        if (aiQuestions != null && aiQuestions.has("questions") && aiQuestions.get("questions").isArray()) {
+            for (JsonNode qNode : aiQuestions.get("questions")) {
                 Difficulty diff = Difficulty.MEDIUM;
                 try {
                     diff = Difficulty.valueOf(qNode.path("difficulty").asText("MEDIUM").toUpperCase());
@@ -135,9 +142,9 @@ public class InterviewServiceImpl implements InterviewService {
         TechnicalQuestion firstQ = sessionQuestions.get(0);
 
         log.info("Technical round started for user: {} session: {}", userId, session.getId());
-        return InterviewStartResponse.builder()
+        InterviewStartResponse response = InterviewStartResponse.builder()
                 .sessionId(session.getId())
-                .totalQuestions(sessionQuestions.size())
+                .totalQuestions(config.getTechnicalQuestionCount())
                 .timeLimitMinutes(config.getTechnicalTimeMinutes())
                 .questionId(firstQ.getId())
                 .questionOrder(1)
@@ -145,6 +152,7 @@ public class InterviewServiceImpl implements InterviewService {
                 .category(firstQ.getCategory())
                 .difficulty(firstQ.getDifficulty().name())
                 .build();
+        return response;
     }
 
     private InterviewStartResponse resumeTechnicalRound(InterviewSession session) {
@@ -212,8 +220,8 @@ public class InterviewServiceImpl implements InterviewService {
 
         long answered = technicalAnswerRepository.findBySessionIdOrderByQuestionOrder(session.getId())
                 .stream().filter(a -> a.getTranscript() != null).count();
-        int total = 10; // Forced total from startTechnicalRound
-        boolean hasNext = answered < total;
+        // Infinite mode: always return true. Frontend timer will stop the interview.
+        boolean hasNext = true;
 
         log.info("Technical answer submitted for session: {} order: {}", request.getSessionId(), request.getQuestionOrder());
         return AnswerEvalResponse.builder()
@@ -222,7 +230,7 @@ public class InterviewServiceImpl implements InterviewService {
                 .score(mockScore)
                 .feedback(answer.getAiFeedback())
                 .nextAvailable(hasNext)
-                .questionsRemaining((int)(total - answered))
+                .questionsRemaining(999) // Infinite
                 .build();
     }
 
@@ -236,7 +244,62 @@ public class InterviewServiceImpl implements InterviewService {
         
         List<TechnicalAnswer> pendingAnswers = technicalAnswerRepository.findBySessionIdAndTranscriptIsNullOrderByQuestionOrderAsc(sessionId);
         
-        if (pendingAnswers.isEmpty()) throw new InterviewException("All questions have been answered");
+        if (pendingAnswers.isEmpty()) {
+            log.info("Current question batch exhausted for session {}. Dynamically generating 5 more questions.", sessionId);
+            // Fetch resume skills
+            List<String> skills = new ArrayList<>();
+            resumeAnalysisRepository.findByUserId(session.getUser().getId()).ifPresent(analysis -> {
+                try {
+                    if (analysis.getSkills() != null) {
+                        JsonNode skillsNode = new ObjectMapper().readTree(analysis.getSkills());
+                        if (skillsNode.isArray()) {
+                            for (JsonNode node : skillsNode) skills.add(node.asText());
+                        }
+                    }
+                } catch (Exception e) {}
+            });
+            
+            int qCount = 5;
+            List<TechnicalQuestion> newQuestions = new ArrayList<>();
+            JsonNode aiQuestions = aiClientService.generateTechnicalQuestions(session.getTrack().getName(), skills, qCount);
+            
+            if (aiQuestions != null && aiQuestions.has("questions") && aiQuestions.get("questions").isArray()) {
+                for (JsonNode qNode : aiQuestions.get("questions")) {
+                    Difficulty diff = Difficulty.MEDIUM;
+                    try { diff = Difficulty.valueOf(qNode.path("difficulty").asText("MEDIUM").toUpperCase()); } catch (Exception ignored) {}
+                    String cat = qNode.path("category").asText("TECHNICAL");
+                    if (cat.length() > 90) cat = cat.substring(0, 90);
+                    TechnicalQuestion q = TechnicalQuestion.builder()
+                            .track(session.getTrack())
+                            .questionText(qNode.path("question_text").asText("Explain this concept"))
+                            .expectedAnswer(qNode.path("expected_answer").asText("A reasonable technical answer"))
+                            .difficulty(diff)
+                            .category(cat)
+                            .isActive(true)
+                            .build();
+                    q = technicalQuestionRepository.save(q);
+                    newQuestions.add(q);
+                }
+            } else {
+                newQuestions = technicalQuestionRepository.findByTrackIdAndIsActiveTrue(session.getTrack().getId());
+                if (newQuestions.size() > qCount) newQuestions = newQuestions.subList(0, qCount);
+            }
+            
+            long currentMaxOrder = technicalAnswerRepository.countBySessionId(sessionId);
+            for (int i = 0; i < newQuestions.size(); i++) {
+                TechnicalAnswer newAnswer = TechnicalAnswer.builder()
+                        .session(session)
+                        .question(newQuestions.get(i))
+                        .questionOrder((int)(currentMaxOrder + i + 1))
+                        .build();
+                technicalAnswerRepository.save(newAnswer);
+            }
+            
+            pendingAnswers = technicalAnswerRepository.findBySessionIdAndTranscriptIsNullOrderByQuestionOrderAsc(sessionId);
+            if (pendingAnswers.isEmpty()) {
+                throw new InterviewException("Failed to generate additional questions.");
+            }
+        }
 
         TechnicalAnswer nextAnswer = pendingAnswers.get(0);
         TechnicalQuestion nextQ = nextAnswer.getQuestion();

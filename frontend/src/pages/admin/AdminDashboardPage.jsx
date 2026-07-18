@@ -1,30 +1,41 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getTracks, addTrack, deleteTrack } from '../../services/adminService';
-import { LogOut, Plus, Trash2, Layers, Users, Activity, Loader2 } from 'lucide-react';
+import { getTracks, addTrack, deleteTrack, getAllStudentsPerformance } from '../../services/adminService';
+import { LogOut, Plus, Trash2, Layers, Users, Activity, Loader2, ChevronRight } from 'lucide-react';
+import TechWingLoader from '../../components/TechWingLoader';
+import Swal from 'sweetalert2';
 
 const AdminDashboardPage = () => {
     const { user, logout } = useAuth();
+    const navigate = useNavigate();
     const [tracks, setTracks] = useState([]);
+    const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [newTrack, setNewTrack] = useState({ name: '', description: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
-        fetchTracks();
+        fetchData();
     }, []);
 
-    const fetchTracks = async () => {
+    const fetchData = async () => {
         try {
-            const res = await getTracks();
-            setTracks(res.data?.data || []);
+            const [tracksRes, studentsRes] = await Promise.all([
+                getTracks(),
+                getAllStudentsPerformance()
+            ]);
+            setTracks(tracksRes.data?.data || []);
+            setStudents(studentsRes.data?.data || []);
         } catch (err) {
-            console.error("Failed to fetch tracks", err);
+            console.error("Failed to fetch dashboard data", err);
         } finally {
             setLoading(false);
         }
     };
+
+
 
     const handleAddTrack = async (e) => {
         e.preventDefault();
@@ -33,7 +44,7 @@ const AdminDashboardPage = () => {
         try {
             await addTrack(newTrack);
             setNewTrack({ name: '', description: '' });
-            fetchTracks();
+            fetchData();
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to add track');
         } finally {
@@ -41,20 +52,65 @@ const AdminDashboardPage = () => {
         }
     };
 
-    const handleDeleteTrack = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this track?")) return;
-        try {
-            await deleteTrack(id);
-            fetchTracks();
-        } catch (err) {
-            alert(err.response?.data?.message || 'Failed to delete track');
+    const handleDeleteTrack = async (e, id) => {
+        e.stopPropagation(); // Prevent track card click
+        const result = await Swal.fire({
+            title: 'Are you sure?',
+            text: "You are about to delete this technology track. This action cannot be undone!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete it!',
+            background: '#1a1f2b',
+            color: '#fff'
+        });
+
+        if (result.isConfirmed) {
+            try {
+                await deleteTrack(id);
+                fetchData();
+                Swal.fire({
+                    title: 'Deleted!',
+                    text: 'The track has been deleted.',
+                    icon: 'success',
+                    background: '#1a1f2b',
+                    color: '#fff'
+                });
+            } catch (err) {
+                Swal.fire({
+                    title: 'Error!',
+                    text: err.response?.data?.message || 'Failed to delete track',
+                    icon: 'error',
+                    background: '#1a1f2b',
+                    color: '#fff'
+                });
+            }
         }
+    };
+
+    const handleLogout = () => {
+        Swal.fire({
+            title: 'Log out?',
+            text: "Are you sure you want to end your session?",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, logout',
+            background: '#1a1f2b',
+            color: '#fff'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                logout();
+            }
+        });
     };
 
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-techwing-dark">
-                <Loader2 className="w-8 h-8 text-techwing-gold animate-spin" />
+                <TechWingLoader text="Loading Admin Dashboard..." />
             </div>
         );
     }
@@ -68,7 +124,7 @@ const AdminDashboardPage = () => {
                     </h1>
                     <p className="text-gray-400 mt-1">Welcome back, {user?.name}</p>
                 </div>
-                <button onClick={logout} className="btn-secondary flex items-center gap-2">
+                <button onClick={handleLogout} className="btn-secondary flex items-center gap-2">
                     <LogOut className="w-4 h-4" /> Logout
                 </button>
             </header>
@@ -93,7 +149,7 @@ const AdminDashboardPage = () => {
                         </div>
                         <div>
                             <p className="text-gray-400 text-sm">Registered Students</p>
-                            <p className="text-2xl font-bold">--</p>
+                            <p className="text-2xl font-bold">{students.length}</p>
                         </div>
                     </div>
                 </div>
@@ -146,14 +202,21 @@ const AdminDashboardPage = () => {
                         ) : (
                             <div className="space-y-3">
                                 {tracks.map(track => (
-                                    <div key={track.id} className="flex justify-between items-center p-4 bg-white/5 rounded-lg border border-white/10 hover:border-techwing-gold/30 transition-colors">
+                                    <div 
+                                        key={track.id} 
+                                        onClick={() => navigate(`/admin/track/${track.id}`)}
+                                        className="flex justify-between items-center p-4 bg-white/5 rounded-lg border border-white/10 hover:border-techwing-gold/30 hover:bg-white/10 transition-all cursor-pointer group"
+                                    >
                                         <div>
-                                            <h3 className="font-semibold text-white">{track.name}</h3>
+                                            <h3 className="font-semibold text-white flex items-center gap-2">
+                                                {track.name}
+                                                <ChevronRight className="w-4 h-4 text-techwing-gold opacity-0 group-hover:opacity-100 transition-opacity" />
+                                            </h3>
                                             <p className="text-sm text-gray-400">{track.description}</p>
                                         </div>
                                         <button 
-                                            onClick={() => handleDeleteTrack(track.id)}
-                                            className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                            onClick={(e) => handleDeleteTrack(e, track.id)}
+                                            className="p-2 text-red-400 hover:bg-red-400/20 rounded-lg transition-colors z-10"
                                         >
                                             <Trash2 className="w-5 h-5" />
                                         </button>
@@ -162,6 +225,64 @@ const AdminDashboardPage = () => {
                             </div>
                         )}
                     </div>
+                </div>
+            </main>
+
+            {/* Students Table */}
+            <main className="max-w-6xl mx-auto mt-8">
+                <div className="glass-panel p-6">
+                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                        <Users className="w-5 h-5 text-techwing-gold" /> All Registered Students
+                    </h2>
+                    
+                    {students.length === 0 ? (
+                        <p className="text-gray-500">No students registered yet.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-white/10 text-gray-400 text-sm">
+                                        <th className="py-3 px-4 font-medium">Name / PIN</th>
+                                        <th className="py-3 px-4 font-medium">Branch & Year</th>
+                                        <th className="py-3 px-4 font-medium">Track</th>
+                                        <th className="py-3 px-4 font-medium text-right">Performance Score</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {students.map(student => (
+                                        <tr key={student.userId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                            <td className="py-3 px-4">
+                                                <div className="font-medium text-white">{student.name}</div>
+                                                <div className="text-xs text-gray-400">{student.pinNumber || 'No PIN'}</div>
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <div className="text-sm">{student.branch || 'Unknown'}</div>
+                                                <div className="text-xs text-gray-400">Year: {student.year || '-'}</div>
+                                            </td>
+                                            <td className="py-3 px-4 text-sm">
+                                                {student.trackName ? (
+                                                    <span className="px-2 py-1 bg-techwing-gold/10 text-techwing-gold rounded-full text-xs">
+                                                        {student.trackName}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-500 text-xs">Not Evaluated</span>
+                                                )}
+                                            </td>
+                                            <td className="py-3 px-4 text-right">
+                                                {student.overallScore !== null && student.overallScore !== undefined ? (
+                                                    <div className="font-bold text-techwing-gold">
+                                                        {student.overallScore.toFixed(1)}/100
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-500 text-sm">Pending</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </main>
         </div>

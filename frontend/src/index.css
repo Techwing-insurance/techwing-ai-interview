@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -6,20 +6,29 @@ body {
   @apply bg-techwing-dark text-white font-sans antialiased;
 }
 
-.glass-panel {
-  @apply bg-techwing-card/80 backdrop-blur-md border border-white/10 shadow-xl rounded-2xl;
+@layer base {
+  select option {
+    background-color: #0a0a0a;
+    color: white;
+  }
 }
 
-.btn-primary {
-  @apply bg-gradient-to-r from-techwing-gold to-techwing-orange text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-techwing-orange/50 transition-all hover:scale-105 active:scale-95;
-}
+@layer components {
+  .glass-panel {
+    @apply bg-techwing-card/80 backdrop-blur-md border border-white/10 shadow-xl rounded-2xl;
+  }
 
-.btn-secondary {
-  @apply bg-white/10 text-white font-bold py-3 px-6 rounded-lg border border-white/20 hover:bg-white/20 transition-all;
-}
+  .btn-primary {
+    @apply bg-gradient-to-r from-techwing-gold to-techwing-orange text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-techwing-orange/50 transition-all hover:scale-105 active:scale-95;
+  }
 
-.input-field {
-  @apply w-full bg-techwing-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-techwing-gold transition-colors;
+  .btn-secondary {
+    @apply bg-white/10 text-white font-bold py-3 px-6 rounded-lg border border-white/20 hover:bg-white/20 transition-all;
+  }
+
+  .input-field {
+    @apply w-full bg-techwing-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-techwing-gold transition-colors;
+  }
 }
 
 ::-webkit-scrollbar {

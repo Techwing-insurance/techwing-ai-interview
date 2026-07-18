@@ -21,10 +21,21 @@ const VoiceAvatar = ({ isListening, isSpeaking, isProcessing, volume = 0, onStar
                     ${isListening ? 'border-techwing-orange' : isSpeaking ? 'border-techwing-gold' : 'border-white/10'}`}>
                     
                     <img 
-                        src="/src/assets/avatar.jpg" 
+                        src="/src/assets/avatar.jpeg" 
                         alt="AI Interviewer" 
                         className="w-full h-full object-cover"
-                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/200/0F172A/CAA928?text=AI+Agent' }} 
+                        onError={(e) => { 
+                            e.target.onerror = null;
+                            // Fallback: hide image and show initials
+                            e.target.style.display = 'none';
+                            const parent = e.target.parentElement;
+                            if (parent && !parent.querySelector('.avatar-fallback')) {
+                                const fallback = document.createElement('div');
+                                fallback.className = 'avatar-fallback w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-techwing-gold text-4xl font-bold';
+                                fallback.textContent = 'AI';
+                                parent.appendChild(fallback);
+                            }
+                        }} 
                     />
                     
                     {/* Overlay overlay when processing */}

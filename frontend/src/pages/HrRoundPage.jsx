@@ -5,6 +5,7 @@ import { useVAD } from '../hooks/useVAD';
 import * as interviewService from '../services/interviewService';
 import { useInterview } from '../context/InterviewContext';
 import { Loader2 } from 'lucide-react';
+import TechWingLoader from '../components/TechWingLoader';
 
 const HrRoundPage = () => {
     const navigate = useNavigate();
@@ -31,9 +32,12 @@ const HrRoundPage = () => {
             setTranscript(userTranscript);
 
             // 2. Send JSON payload to Backend
+            const currentSessionData = sessionDataRef.current;
+            const currentQuestion = questionRef.current;
+
             const payload = {
-                sessionId: sessionData?.sessionId,
-                questionOrder: question?.order,
+                sessionId: currentSessionData?.sessionId,
+                questionOrder: currentQuestion?.order,
                 transcript: userTranscript
             };
 
@@ -42,16 +46,15 @@ const HrRoundPage = () => {
             
             setFeedback(evalData.feedback);
             
+            // Speak feedback
+            await speak(evalData.feedback);
+            
             // 3. Process Next or Complete
             if (evalData.nextAvailable) {
-                setTimeout(() => {
-                    if (sessionData?.sessionId) fetchNextQuestion(sessionData.sessionId);
-                }, 4000);
+                if (currentSessionData?.sessionId) fetchNextQuestion(currentSessionData.sessionId);
             } else {
-                setTimeout(() => {
-                    alert("Interview Complete! Generating Report...");
-                    navigate('/report');
-                }, 4000);
+                alert("Interview Complete! Generating Report...");
+                navigate('/report');
             }
 
         } catch (err) {
@@ -66,8 +69,21 @@ const HrRoundPage = () => {
         onSpeechEnd: handleSpeechEnd
     });
     
-    const [sessionData, setSessionData] = useState(null);
-    const [question, setQuestion] = useState(null);
+    const [sessionData, setSessionDataState] = useState(null);
+    const [question, setQuestionState] = useState(null);
+    const sessionDataRef = useRef(null);
+    const questionRef = useRef(null);
+
+    const setSessionData = (data) => {
+        sessionDataRef.current = data;
+        setSessionDataState(data);
+    };
+
+    const setQuestion = (data) => {
+        questionRef.current = data;
+        setQuestionState(data);
+    };
+
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [feedback, setFeedback] = useState('');
@@ -89,7 +105,8 @@ const HrRoundPage = () => {
                     text: data.questionText
                 });
                 
-                speak(data.questionText);
+                await speak(data.questionText);
+                startRecording();
             } catch (err) {
                 console.error('Failed to start HR round', err);
             }
@@ -98,15 +115,48 @@ const HrRoundPage = () => {
     }, []);
 
     const speak = (text) => {
-        setIsSpeaking(true);
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.onend = () => setIsSpeaking(false);
-        window.speechSynthesis.speak(utterance);
+        return new Promise(async (resolve, reject) => {
+            setIsSpeaking(true);
+            try {
+                const response = await fetch('http://localhost:8000/ai/tts/speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, voice: 'male' }) 
+                });
+                if (!response.ok) throw new Error('TTS Failed');
+                
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                
+                if (audioRef.current) {
+                    audioRef.current.pause();
+                }
+                const audio = new Audio(url);
+                audioRef.current = audio;
+                
+                audio.onended = () => {
+                    setIsSpeaking(false);
+                    resolve();
+                };
+                audio.onerror = (e) => {
+                    console.error('Audio playback error', e);
+                    setIsSpeaking(false);
+                    resolve();
+                };
+                
+                await audio.play();
+            } catch (err) {
+                console.error('TTS error', err);
+                setIsSpeaking(false);
+                resolve();
+            }
+        });
     };
 
     const handleStartRecording = () => {
-        window.speechSynthesis.cancel();
-        if (audioRef.current) audioRef.current.pause();
+        if (audioRef.current) {
+            audioRef.current.pause();
+        }
         setIsSpeaking(false);
         startRecording();
     };
@@ -126,7 +176,8 @@ const HrRoundPage = () => {
                 order: data.order,
                 text: data.questionText
             });
-            speak(data.questionText);
+            await speak(data.questionText);
+            startRecording();
         } catch (error) {
             console.error("Failed to fetch next question", error);
         }
@@ -135,7 +186,7 @@ const HrRoundPage = () => {
     if (!question) {
         return (
             <div className="min-h-screen bg-techwing-dark flex items-center justify-center">
-                <Loader2 className="w-12 h-12 text-techwing-gold animate-spin" />
+                <TechWingLoader text="Initializing HR Round..." />
             </div>
         );
     }

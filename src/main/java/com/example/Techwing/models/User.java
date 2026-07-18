@@ -30,6 +30,12 @@ public class User {
     @Column(length = 100)
     private String branch;
 
+    @Column(name = "pin_number", length = 50)
+    private String pinNumber;
+
+    @Column(name = "academic_year")
+    private Integer year;
+
     @Column(length = 15)
     private String phone;
 
@@ -44,6 +50,11 @@ public class User {
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "track_id")
+    @ToString.Exclude
+    private TechnologyTrack track;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
