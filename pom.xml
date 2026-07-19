@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
@@ -6,11 +6,6 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <!--
-        PARENT: Spring Boot 3.3.2
-        Manages dependency versions and plugin configuration baselines.
-        Compatible with Jakarta EE 10 (Servlet 6.0) and Tomcat 10.
-    -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -18,108 +13,22 @@
         <relativePath/>
     </parent>
 
-    <!-- PROJECT COORDINATES (unchanged) -->
     <groupId>com.example</groupId>
     <artifactId>Techwing_AI_interview_platform</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>Techwing_AI_interview_platform</name>
     <description>Techwing AI interview platform</description>
-
-    <!--
-        WAR packaging is required for deployment on Apache Tomcat 10.
-        spring-boot-starter-tomcat must be "provided" so the embedded
-        Tomcat JARs are excluded from ROOT.war.
-        Tomcat 10 on the EC2 instance supplies the container at runtime.
-    -->
     <packaging>war</packaging>
 
-    <!--
-        PROPERTIES
-        - All original application library versions are preserved.
-        - New entries add compiler settings, encoding, plugin versions,
-          and SonarQube integration properties.
-        - Plugin versions are declared here so they can be updated in
-          one place and are referenced from pluginManagement below.
-    -->
     <properties>
-        <!-- Java 17 target -->
         <java.version>17</java.version>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
-        <!--
-            The "release" flag (Java 9+) is preferred over source+target
-            because it prevents accidental use of internal JDK APIs
-            that are newer than the declared target release.
-        -->
-        <maven.compiler.release>17</maven.compiler.release>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-
-        <!-- Application library versions (original, unchanged) -->
         <jjwt.version>0.12.6</jjwt.version>
         <aws.sdk.version>2.26.27</aws.sdk.version>
         <itext.version>8.0.4</itext.version>
-
-        <!--
-            Build / DevOps plugin versions
-            Pinned to the latest stable GA releases as of July 2026.
-            Milestone and snapshot releases are intentionally avoided
-            for production CI/CD pipelines.
-        -->
-        <!-- maven-compiler-plugin: latest stable Jan 2026 -->
-        <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
-        <!-- maven-war-plugin: latest stable Nov 2025 -->
-        <maven-war-plugin.version>3.5.1</maven-war-plugin.version>
-        <!-- maven-clean-plugin: latest stable May 2025 -->
-        <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
-        <!--
-            maven-surefire-plugin / maven-failsafe-plugin: 3.5.6 is the
-            latest stable GA release (May 2026). 3.6.0-M1 is a milestone
-            build and is not recommended for production pipelines.
-        -->
-        <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
-        <maven-failsafe-plugin.version>3.5.6</maven-failsafe-plugin.version>
-        <!-- jacoco-maven-plugin: latest stable Jun 2026, supports Java 26 -->
-        <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
-        <!-- sonar-maven-plugin: latest Jul 2026 (org.sonarsource.scanner.maven group) -->
-        <sonar-maven-plugin.version>5.7.0.6970</sonar-maven-plugin.version>
-
-        <!--
-            SonarQube integration properties.
-            Override from Jenkins at runtime:
-              mvn sonar:sonar \
-                -Dsonar.host.url=http://<host>:9000 \
-                -Dsonar.token=$SONAR_TOKEN \
-                -Dsonar.projectKey=techwing-ai-interview
-        -->
-        <sonar.java.source>17</sonar.java.source>
-        <!-- Path to the JaCoCo XML report consumed by SonarQube -->
-        <sonar.coverage.jacoco.xmlReportPaths>
-            ${project.build.directory}/site/jacoco/jacoco.xml
-        </sonar.coverage.jacoco.xmlReportPaths>
-        <!-- Exclude generated and boilerplate code from coverage metrics -->
-        <sonar.exclusions>
-            **/generated/**,
-            **/*Application.java,
-            **/config/**,
-            **/entity/**,
-            **/dto/**,
-            **/exception/**
-        </sonar.exclusions>
     </properties>
 
-    <!--
-        DEPENDENCIES
-        All original dependencies are preserved exactly as-is.
-        No additions, removals, or scope changes.
-    -->
     <dependencies>
-
-        <!--
-            TOMCAT FOR WAR DEPLOYMENT
-            scope=provided keeps embedded Tomcat JARs out of ROOT.war.
-            The external Tomcat 10 instance on AWS EC2 supplies them.
-        -->
+        <!-- TOMCAT FOR WAR DEPLOYMENT -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-tomcat</artifactId>
@@ -155,10 +64,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
-        <!--
-            DevTools: optional and runtime-scoped.
-            Spring Boot repackage goal automatically excludes it from the final WAR.
-        -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
@@ -181,7 +86,7 @@
             <artifactId>flyway-mysql</artifactId>
         </dependency>
 
-        <!-- JWT (JJWT 0.12.6) -->
+        <!-- JWT -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
@@ -200,7 +105,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- AWS SDK v2 -->
+        <!-- AWS S3 -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
@@ -211,6 +116,9 @@
             <artifactId>ses</artifactId>
             <version>${aws.sdk.version}</version>
         </dependency>
+
+        <!-- PDF -->
+       
 
         <!-- FILE EXTRACTION -->
         <dependency>
@@ -267,7 +175,6 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- H2 in-memory DB: used only during tests, never packaged into WAR -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -276,361 +183,35 @@
 
     </dependencies>
 
-    <!-- BUILD -->
     <build>
-        <!--
-            finalName=ROOT produces ROOT.war.
-            When placed in Tomcat 10 webapps/ it is deployed at context path "/".
-        -->
         <finalName>ROOT</finalName>
-
-        <!--
-            pluginManagement
-            Central registry for plugin versions and configuration.
-            Plugins declared here are NOT executed unless they are also
-            listed in the active <plugins> section or bound to the
-            lifecycle by the parent POM.
-
-            Benefits:
-              - Single place to bump a plugin version.
-              - Active <plugins> section stays concise (no repeated config).
-              - Child modules inherit without re-specifying versions.
-        -->
-        <pluginManagement>
-            <plugins>
-
-                <!--
-                    Spring Boot Maven Plugin
-                    The repackage goal wraps the WAR so it can optionally be
-                    run standalone with "java -jar" (useful for Docker).
-                    Lombok is excluded because it is compile-time only and
-                    must not be bundled into the final artifact.
-                -->
-                <plugin>
-                    <groupId>org.springframework.boot</groupId>
-                    <artifactId>spring-boot-maven-plugin</artifactId>
-                    <configuration>
-                        <excludes>
-                            <exclude>
-                                <groupId>org.projectlombok</groupId>
-                                <artifactId>lombok</artifactId>
-                            </exclude>
-                        </excludes>
-                    </configuration>
-                </plugin>
-
-                <!--
-                    Maven Compiler Plugin (v3.15.0)
-                    Uses the "release" flag (Java 9+) in addition to
-                    source/target for stricter cross-compilation safety.
-                    Lombok annotation processor is placed on the processor
-                    path so it runs before javac (required for @Data,
-                    @Builder, @Slf4j, etc.).
-                    UTF-8 encoding prevents platform-specific build failures.
-                    parameters=true retains method parameter names in bytecode,
-                    required by Spring MVC / WebFlux parameter binding.
-                -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
-                    <version>${maven-compiler-plugin.version}</version>
-                    <configuration>
-                        <source>${java.version}</source>
-                        <target>${java.version}</target>
-                        <release>${java.version}</release>
-                        <encoding>${project.build.sourceEncoding}</encoding>
-                        <parameters>true</parameters>
-                        <annotationProcessorPaths>
-                            <path>
-                                <groupId>org.projectlombok</groupId>
-                                <artifactId>lombok</artifactId>
-                                <!-- version managed by spring-boot-starter-parent BOM -->
-                            </path>
-                        </annotationProcessorPaths>
-                    </configuration>
-                </plugin>
-
-                <!--
-                    Maven WAR Plugin (v3.5.1)
-                    Produces ROOT.war compatible with Tomcat 10 /
-                    Jakarta Servlet 6.0 / Jakarta EE 10.
-                    failOnMissingWebXml=false suppresses the warning
-                    because Spring Boot uses programmatic Servlet registration
-                    and does not require a web.xml file.
-                    The explicit warName guards against accidental override
-                    in multi-module setups.
-                -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-war-plugin</artifactId>
-                    <version>${maven-war-plugin.version}</version>
-                    <configuration>
-                        <failOnMissingWebXml>false</failOnMissingWebXml>
-                        <warName>ROOT</warName>
-                    </configuration>
-                </plugin>
-
-                <!--
-                    Maven Clean Plugin (v3.5.0)
-                    Wipes target/ on every "mvn clean package" Jenkins run
-                    so stale build artifacts never bleed between builds.
-                -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-clean-plugin</artifactId>
-                    <version>${maven-clean-plugin.version}</version>
-                </plugin>
-
-                <!--
-                    Maven Surefire Plugin (v3.5.6) - Unit Tests
-                    Version 3.x natively detects JUnit 5 (Jupiter) via the
-                    JUnit Platform launcher included in spring-boot-starter-test.
-                    No extra provider JAR is needed.
-                    ${surefireArgLine} is injected by the JaCoCo prepare-agent
-                    execution so code coverage is measured during unit tests.
-                -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-surefire-plugin</artifactId>
-                    <version>${maven-surefire-plugin.version}</version>
-                    <configuration>
-                        <!-- JaCoCo agent argument set by the jacoco:prepare-agent goal -->
-                        <argLine>${surefireArgLine}</argLine>
-                        <!-- Print test output directly to Jenkins console log -->
-                        <useFile>false</useFile>
-                        <!-- Do not fail if no tests exist yet (safe for new modules) -->
-                        <failIfNoTests>false</failIfNoTests>
-                        <includes>
-                            <include>**/*Test.java</include>
-                            <include>**/*Tests.java</include>
-                            <include>**/*Spec.java</include>
-                        </includes>
-                    </configuration>
-                </plugin>
-
-                <!--
-                    Maven Failsafe Plugin (v3.5.6) - Integration Tests
-                    Bound to the integration-test and verify lifecycle phases.
-                    Runs *IT.java / *ITCase.java / *IntegrationTest.java classes.
-                    Separated from Surefire so that an integration test failure
-                    does NOT prevent the post-integration-test teardown phase.
-                    ${failsafeArgLine} is injected by jacoco:prepare-agent-integration.
-                -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-failsafe-plugin</artifactId>
-                    <version>${maven-failsafe-plugin.version}</version>
-                    <configuration>
-                        <!-- JaCoCo agent argument for integration tests -->
-                        <argLine>${failsafeArgLine}</argLine>
-                        <includes>
-                            <include>**/*IT.java</include>
-                            <include>**/*ITCase.java</include>
-                            <include>**/*IntegrationTest.java</include>
-                        </includes>
-                    </configuration>
-                    <executions>
-                        <execution>
-                            <goals>
-                                <goal>integration-test</goal>
-                                <goal>verify</goal>
-                            </goals>
-                        </execution>
-                    </executions>
-                </plugin>
-
-                <!--
-                    JaCoCo Maven Plugin (v0.8.15)
-                    Instruments bytecode at runtime to measure code coverage.
-                    Two sets of reports are generated:
-                      - target/site/jacoco/      unit test coverage
-                      - target/site/jacoco-it/   integration test coverage
-                    Each set contains both XML (for SonarQube) and HTML (for humans).
-                    The sonar.coverage.jacoco.xmlReportPaths property in <properties>
-                    above points SonarQube to the XML report path automatically.
-
-                    Execution order:
-                      1. jacoco-prepare-agent           (before unit tests)
-                      2. jacoco-prepare-agent-integration (before integration tests)
-                      3. jacoco-report                  (after unit tests, test phase)
-                      4. jacoco-report-integration      (after integration tests)
-                -->
-                <plugin>
-                    <groupId>org.jacoco</groupId>
-                    <artifactId>jacoco-maven-plugin</artifactId>
-                    <version>${jacoco-maven-plugin.version}</version>
-                    <executions>
-                        <!--
-                            Step 1: Instrument bytecode before unit tests.
-                            Sets ${surefireArgLine} = the -javaagent JVM argument.
-                            Surefire reads it via <argLine>${surefireArgLine}</argLine>.
-                        -->
-                        <execution>
-                            <id>jacoco-prepare-agent</id>
-                            <goals>
-                                <goal>prepare-agent</goal>
-                            </goals>
-                            <configuration>
-                                <propertyName>surefireArgLine</propertyName>
-                            </configuration>
-                        </execution>
-                        <!--
-                            Step 2: Instrument bytecode before integration tests.
-                            Sets ${failsafeArgLine} for Failsafe.
-                        -->
-                        <execution>
-                            <id>jacoco-prepare-agent-integration</id>
-                            <goals>
-                                <goal>prepare-agent-integration</goal>
-                            </goals>
-                            <configuration>
-                                <propertyName>failsafeArgLine</propertyName>
-                            </configuration>
-                        </execution>
-                        <!--
-                            Step 3: Generate unit test coverage report.
-                            Bound to the "test" phase (runs after Surefire).
-                            SonarQube reads: target/site/jacoco/jacoco.xml
-                        -->
-                        <execution>
-                            <id>jacoco-report</id>
-                            <phase>test</phase>
-                            <goals>
-                                <goal>report</goal>
-                            </goals>
-                            <configuration>
-                                <outputDirectory>${project.build.directory}/site/jacoco</outputDirectory>
-                                <formats>
-                                    <format>XML</format>
-                                    <format>HTML</format>
-                                </formats>
-                            </configuration>
-                        </execution>
-                        <!--
-                            Step 4: Generate integration test coverage report.
-                            Bound to the "post-integration-test" phase.
-                        -->
-                        <execution>
-                            <id>jacoco-report-integration</id>
-                            <phase>post-integration-test</phase>
-                            <goals>
-                                <goal>report-integration</goal>
-                            </goals>
-                            <configuration>
-                                <outputDirectory>${project.build.directory}/site/jacoco-it</outputDirectory>
-                                <formats>
-                                    <format>XML</format>
-                                    <format>HTML</format>
-                                </formats>
-                            </configuration>
-                        </execution>
-                    </executions>
-                </plugin>
-
-                <!--
-                    SonarQube Maven Plugin (v5.7.0.6970)
-                    GroupId: org.sonarsource.scanner.maven
-                    Note: org.codehaus.mojo:sonar-maven-plugin is DEPRECATED.
-
-                    Triggered in Jenkins as a SEPARATE Maven invocation
-                    AFTER "mvn clean package" so the compiled classes and
-                    JaCoCo XML report exist before analysis starts:
-
-                      mvn sonar:sonar \
-                        -Dsonar.host.url=$SONAR_HOST_URL \
-                        -Dsonar.token=$SONAR_TOKEN \
-                        -Dsonar.projectKey=techwing-ai-interview
-
-                    The sonar.* properties in <properties> above
-                    pre-configure coverage report paths and code exclusions.
-                -->
-                <plugin>
-                    <groupId>org.sonarsource.scanner.maven</groupId>
-                    <artifactId>sonar-maven-plugin</artifactId>
-                    <version>${sonar-maven-plugin.version}</version>
-                </plugin>
-
-            </plugins>
-        </pluginManagement>
-
-        <!--
-            ACTIVE PLUGINS
-            Versions and full configuration come from pluginManagement above.
-            Only plugins that must execute (or have execution overrides)
-            are listed here, keeping this section concise.
-        -->
         <plugins>
-
-            <!-- Spring Boot: repackage WAR and exclude Lombok -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
             </plugin>
-
-            <!-- Compiler: Java 17, UTF-8, Lombok annotation processor -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
             </plugin>
-
-            <!-- WAR: produces ROOT.war, no web.xml required -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-war-plugin</artifactId>
-            </plugin>
-
-            <!-- Clean: wipes target/ on every Jenkins build -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-            </plugin>
-
-            <!-- Surefire: JUnit 5 unit tests with JaCoCo instrumentation -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-            </plugin>
-
-            <!-- Failsafe: integration tests (*IT.java) with JaCoCo -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-            </plugin>
-
-            <!-- JaCoCo: code coverage instrumentation and XML/HTML reports -->
-            <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-            </plugin>
-
-            <!-- SonarQube: static analysis (triggered via sonar:sonar goal) -->
-            <plugin>
-                <groupId>org.sonarsource.scanner.maven</groupId>
-                <artifactId>sonar-maven-plugin</artifactId>
-            </plugin>
-
-            <!--
-                Resources: Copy React frontend build output into the
-                Spring Boot static resources directory.
-
-                Jenkins pipeline execution order:
-                  1. git clone
-                  2. npm install
-                  3. npm run build         (populates frontend/dist/)
-                  4. mvn clean package     (generate-resources phase copies
-                                            frontend/dist/ to
-                                            src/main/resources/static/,
-                                            then Spring Boot packages
-                                            static/ into ROOT.war)
-                  5. mvn sonar:sonar       (separate invocation for SonarQube scan)
-                  6. Deploy ROOT.war to Tomcat 10 webapps/
-
-                IMPORTANT: filtering=false prevents Maven from interpreting
-                ${...} tokens inside JS, CSS, and HTML files which would
-                corrupt the frontend bundle.
-                overwrite=true ensures fresh Jenkins builds always replace
-                stale assets from previous runs.
-            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
@@ -649,13 +230,12 @@
                                     <filtering>false</filtering>
                                 </resource>
                             </resources>
-                            <overwrite>true</overwrite>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
-
         </plugins>
+
     </build>
 
 </project>
