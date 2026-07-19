@@ -154,9 +154,13 @@ const HrRoundPage = () => {
             setIsSpeaking(true);
             try {
                 // Use Spring Boot proxy — works in production on mobile
+                const token = localStorage.getItem('token');
                 const response = await fetch('/api/voice/speak', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({ text, voice: 'female' })
                 });
                 if (!response.ok) throw new Error('TTS Failed');

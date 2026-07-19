@@ -29,7 +29,14 @@ const DashboardPage = () => {
             setResumeUploaded(true);
         } catch (error) {
             console.error('Upload failed', error);
-            alert('Resume upload failed. Please try again.');
+            Swal.fire({
+                title: 'Upload Failed',
+                text: 'Resume upload failed. Please ensure the backend server is running.',
+                icon: 'error',
+                background: '#1a1f2b',
+                color: '#fff',
+                confirmButtonColor: '#CAA928'
+            });
             setFile(null); // Reset on failure
         } finally {
             setUploading(false);
@@ -38,7 +45,14 @@ const DashboardPage = () => {
 
     const startInterview = () => {
         if (!resumeUploaded) {
-            alert('Please upload your resume first to personalize the interview.');
+            Swal.fire({
+                title: 'Resume Required',
+                text: 'Please upload your resume first to personalize the interview.',
+                icon: 'warning',
+                background: '#1a1f2b',
+                color: '#fff',
+                confirmButtonColor: '#CAA928'
+            });
             return;
         }
         navigate('/interview/technical');
