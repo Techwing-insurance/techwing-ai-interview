@@ -131,7 +131,31 @@ public class InterviewServiceImpl implements InterviewService {
         }
 
         if (sessionQuestions.isEmpty()) {
-            throw new InterviewException("No questions available for this track and AI generation failed");
+            log.warn("AI generation failed and no DB questions found. Using built-in fallback questions.");
+            String[] fallbackQs = {
+                "Tell me about yourself and your technical background.",
+                "What programming languages are you most comfortable with, and why?",
+                "Explain the difference between object-oriented and functional programming.",
+                "How do you approach debugging a complex issue in your code?",
+                "Describe a challenging technical project you worked on and how you solved it.",
+                "What is the difference between a stack and a queue? Give a real-world use case.",
+                "Explain REST API design principles.",
+                "What is your understanding of database indexing and when would you use it?",
+                "How does garbage collection work in Java or your preferred language?",
+                "Describe your experience with version control and CI/CD pipelines."
+            };
+            for (int i = 0; i < fallbackQs.length; i++) {
+                TechnicalQuestion q = TechnicalQuestion.builder()
+                        .track(config.getTrack())
+                        .questionText(fallbackQs[i])
+                        .expectedAnswer("A clear and thoughtful technical answer.")
+                        .difficulty(Difficulty.MEDIUM)
+                        .category("GENERAL")
+                        .isActive(true)
+                        .build();
+                q = technicalQuestionRepository.save(q);
+                sessionQuestions.add(q);
+            }
         }
         
         // Ensure we only have up to qCount questions
@@ -365,7 +389,29 @@ public class InterviewServiceImpl implements InterviewService {
         }
 
         List<HRQuestion> questions = hrQuestionRepository.findByIsActiveTrue();
-        if (questions.isEmpty()) throw new InterviewException("No HR questions available. Please seed the database.");
+        if (questions.isEmpty()) {
+            log.warn("No HR questions in DB. Using built-in fallback HR questions.");
+            String[][] fallbackHRQs = {
+                {"Tell me about yourself.", "INTRODUCTION"},
+                {"Why do you want to work in the technology field?", "MOTIVATION"},
+                {"What are your greatest strengths and weaknesses?", "SELF_AWARENESS"},
+                {"Describe a time you worked in a team and faced a conflict. How did you resolve it?", "TEAMWORK"},
+                {"Where do you see yourself in 5 years?", "CAREER_GOALS"},
+                {"How do you handle pressure and tight deadlines?", "WORK_ETHIC"},
+                {"Tell me about a time you demonstrated leadership.", "LEADERSHIP"},
+                {"What motivates you to give your best at work?", "MOTIVATION"},
+                {"How do you prioritize tasks when you have multiple deadlines?", "PROBLEM_SOLVING"},
+                {"Do you have any questions for us?", "CLOSING"}
+            };
+            for (String[] q : fallbackHRQs) {
+                HRQuestion hrQ = HRQuestion.builder()
+                        .questionText(q[0])
+                        .category(com.example.Techwing.models.HRCategory.BEHAVIORAL)
+                        .isActive(true)
+                        .build();
+                questions.add(hrQuestionRepository.save(hrQ));
+            }
+        }
 
         session.setStatus(SessionStatus.HR_IN_PROGRESS);
         sessionRepository.save(session);
