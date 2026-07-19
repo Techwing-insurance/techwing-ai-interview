@@ -17,11 +17,11 @@ const VoiceAvatar = ({ isListening, isSpeaking, isProcessing, volume = 0, onStar
                 {/* Avatar Image container */}
                 <div 
                     style={{ transform: `scale(${scale})`, transition: 'transform 0.05s ease-out' }}
-                    className={`relative w-48 h-48 rounded-full overflow-hidden border-4 z-10 
+                    className={`relative w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-80 lg:h-80 xl:w-96 xl:h-96 rounded-full overflow-hidden border-4 z-10 
                     ${isListening ? 'border-techwing-orange' : isSpeaking ? 'border-techwing-gold' : 'border-white/10'}`}>
                     
                     <img 
-                        src="/src/assets/avatar.jpeg" 
+                        src="/avatar.jpeg" 
                         alt="AI Interviewer" 
                         className="w-full h-full object-cover"
                         onError={(e) => { 
