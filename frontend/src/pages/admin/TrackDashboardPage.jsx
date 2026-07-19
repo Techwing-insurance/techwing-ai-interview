@@ -15,7 +15,7 @@ const TrackDashboardPage = () => {
     
     // Modal state
     const [showSettingsModal, setShowSettingsModal] = useState(false);
-    const [editConfig, setEditConfig] = useState({ technicalTimeMinutes: 5, technicalQuestionCount: 10 });
+    const [editConfig, setEditConfig] = useState({ technicalTimeMinutes: 5, technicalQuestionCount: 10, hrTimeMinutes: 15 });
     const [savingConfig, setSavingConfig] = useState(false);
 
     useEffect(() => {
@@ -35,7 +35,8 @@ const TrackDashboardPage = () => {
                 setConfig(configRes.data.data);
                 setEditConfig({
                     technicalTimeMinutes: configRes.data.data.technicalTimeMinutes,
-                    technicalQuestionCount: configRes.data.data.technicalQuestionCount || 10
+                    technicalQuestionCount: configRes.data.data.technicalQuestionCount || 10,
+                    hrTimeMinutes: configRes.data.data.hrTimeMinutes || 15,
                 });
             }
         } catch (err) {
@@ -141,6 +142,13 @@ const TrackDashboardPage = () => {
                                     <span className="text-white">{config?.technicalTimeMinutes || 5} Minutes</span>
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-sm text-gray-400 mb-1">HR Round Time Limit</label>
+                                <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/10">
+                                    <Clock className="w-4 h-4 text-techwing-orange" />
+                                    <span className="text-white">{config?.hrTimeMinutes || 15} Minutes</span>
+                                </div>
+                            </div>
                             <button 
                                 onClick={() => setShowSettingsModal(true)}
                                 className="btn-secondary w-full text-sm"
@@ -172,7 +180,11 @@ const TrackDashboardPage = () => {
                                     </thead>
                                     <tbody>
                                         {students.map(student => (
-                                            <tr key={student.userId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                            <tr 
+                                                key={student.userId} 
+                                                onClick={() => navigate(`/admin/students/${student.userId}`)}
+                                                className="border-b border-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+                                            >
                                                 <td className="py-3 px-4">
                                                     <div className="font-medium text-white">{student.name}</div>
                                                     <div className="text-xs text-gray-400">{student.pinNumber || 'No PIN'}</div>
@@ -221,8 +233,8 @@ const TrackDashboardPage = () => {
                                 <label className="block text-sm font-medium text-gray-300 mb-2">
                                     Technical Round Time Limit (Minutes)
                                 </label>
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     min="1"
                                     max="60"
                                     className="input-field w-full"
@@ -230,7 +242,23 @@ const TrackDashboardPage = () => {
                                     onChange={(e) => setEditConfig({...editConfig, technicalTimeMinutes: parseInt(e.target.value) || 0})}
                                 />
                                 <p className="text-xs text-gray-500 mt-2">
-                                    The interview will automatically end and redirect to HR round when this timer expires.
+                                    Interview auto-ends and moves to HR round when this timer expires.
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    HR Round Time Limit (Minutes)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="60"
+                                    className="input-field w-full"
+                                    value={editConfig.hrTimeMinutes}
+                                    onChange={(e) => setEditConfig({...editConfig, hrTimeMinutes: parseInt(e.target.value) || 0})}
+                                />
+                                <p className="text-xs text-gray-500 mt-2">
+                                    HR round auto-ends and report is generated when this timer expires.
                                 </p>
                             </div>
                         </div>

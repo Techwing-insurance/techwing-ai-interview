@@ -107,8 +107,6 @@ public class DataSeeder implements CommandLineRunner {
                     .track(track)
                     .technicalQuestionCount(10)   // 5 resume-based + 5 role-based, AI generated
                     .technicalTimeMinutes(25)
-                    .codingProblemCount(0)         // Coding round DISABLED
-                    .codingTimeMinutes(0)          // Coding round DISABLED
                     .hrQuestionCount(5)
                     .hrTimeMinutes(12)
                     .isActive(true)

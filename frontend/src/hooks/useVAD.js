@@ -45,6 +45,9 @@ export const useVAD = ({
   }, []);
 
   const startRecording = useCallback(async () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        return; // Prevent multiple concurrent recording sessions
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;

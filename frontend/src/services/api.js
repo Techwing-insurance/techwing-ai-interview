@@ -1,8 +1,9 @@
 import axios from 'axios';
 
-// Use relative URL so this works on localhost AND on AWS EC2 Tomcat
+// Use VITE_API_BASE_URL if available (for Render), otherwise fallback to relative /api for local dev proxy
 const api = axios.create({
-    baseURL: '/api',
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+    timeout: 120000, // 120 second timeout for AI operations
 });
 
 // Attach JWT token to every request automatically
@@ -18,11 +19,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response && error.response.status === 401) {
+        // Skip interceptor for authentication endpoints
+        const isAuthEndpoint = error.config && error.config.url && (error.config.url.includes('/auth/login') || error.config.url.includes('/auth/register'));
+        
+        if (error.response && error.response.status === 401 && !isAuthEndpoint) {
             localStorage.removeItem('token');
             localStorage.removeItem('refreshToken');
             localStorage.removeItem('user');
-            window.location.href = '/login';
+            window.location.href = '/#/login';
         }
         return Promise.reject(error);
     }

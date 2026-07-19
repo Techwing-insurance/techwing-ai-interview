@@ -15,12 +15,10 @@ public class ReportResponse {
     private String email;
     private String track;
     private Double technicalScore;
-    private Double codingScore;
     private Double hrScore;
     private Double overallScore;
     private String recommendation;
     private String technicalBreakdown;
-    private String codingBreakdown;
     private String hrBreakdown;
     private String strengths;
     private String weaknesses;

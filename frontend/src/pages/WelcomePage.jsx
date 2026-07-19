@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mic, Code, FileText, ArrowRight } from 'lucide-react';
@@ -30,7 +30,7 @@ const WelcomePage = () => {
                 
                 <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-12">
                     Master your interview skills with real-time AI feedback. 
-                    Experience realistic Technical, Coding, and HR rounds tailored to your resume.
+                    Experience realistic Technical and HR rounds tailored to your resume.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-6 justify-center mb-16">
@@ -54,7 +54,7 @@ const WelcomePage = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.5, duration: 1 }}
-                    className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto"
+                    className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto"
                 >
                     <div className="glass-panel p-6 text-left">
                         <div className="w-12 h-12 bg-techwing-gold/20 rounded-lg flex items-center justify-center mb-4 text-techwing-gold">
@@ -64,14 +64,6 @@ const WelcomePage = () => {
                         <p className="text-gray-400 text-sm">Upload your resume to get customized questions based on your actual skills and projects.</p>
                     </div>
                     
-                    <div className="glass-panel p-6 text-left">
-                        <div className="w-12 h-12 bg-techwing-orange/20 rounded-lg flex items-center justify-center mb-4 text-techwing-orange">
-                            <Code />
-                        </div>
-                        <h3 className="text-xl font-bold mb-2">Live Coding</h3>
-                        <p className="text-gray-400 text-sm">Write, run, and test code in real-time with our integrated multiple-language editor.</p>
-                    </div>
-
                     <div className="glass-panel p-6 text-left">
                         <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-4 text-blue-400">
                             <Mic />

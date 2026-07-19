@@ -30,9 +30,6 @@ public class InterviewReport {
     @Column(name = "technical_score")
     private Double technicalScore;
 
-    @Column(name = "coding_score")
-    private Double codingScore;
-
     @Column(name = "hr_score")
     private Double hrScore;
 
@@ -54,9 +51,6 @@ public class InterviewReport {
 
     @Column(name = "hr_breakdown", columnDefinition = "JSON")
     private String hrBreakdown;
-
-    @Column(name = "coding_breakdown", columnDefinition = "JSON")
-    private String codingBreakdown;
 
     @Column(name = "ai_summary", columnDefinition = "TEXT")
     private String aiSummary;

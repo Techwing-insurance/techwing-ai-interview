@@ -102,6 +102,22 @@ public class ResumeServiceImpl implements ResumeService {
                 certifications = aiResult.has("certifications") ? aiResult.get("certifications").toString() : "[]";
                 experienceYears= aiResult.has("experience_years") ? aiResult.get("experience_years").asDouble(0.0) : 0.0;
                 summary        = aiResult.has("summary")        ? aiResult.get("summary").asText("") : "";
+
+                // Dynamically update the user's college from the parsed education
+                if (aiResult.has("education")) {
+                    JsonNode eduNode = aiResult.get("education");
+                    if (eduNode.isArray() && eduNode.size() > 0) {
+                        JsonNode firstEdu = eduNode.get(0);
+                        if (firstEdu.has("institution")) {
+                            String institution = firstEdu.get("institution").asText();
+                            if (institution != null && !institution.trim().isEmpty()) {
+                                User u = resume.getUser();
+                                u.setCollege(institution.trim());
+                                userRepository.save(u);
+                            }
+                        }
+                    }
+                }
             } else {
                 // Fallback when AI service is offline
                 log.warn("AI service returned null, using fallback for resumeId: {}", resumeId);

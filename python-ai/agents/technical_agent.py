@@ -275,13 +275,16 @@ Generate exactly {count} technical interview questions following this strict str
 - Questions 1-5: Based ENTIRELY on the candidate's RESUME SKILLS above. Test depth of knowledge on what they claim to know. Ask about specific technologies from their resume.
 - Questions 6-10: Based ENTIRELY on the ROLE TOPICS above. Sample from different topic categories. Mix difficulties.
 
+{randomness_constraint}
+
 RULES:
-1. Questions must be conceptual and open-ended — this is a VOICE interview, no code writing
-2. Each question needs a detailed expected answer (4-6 sentences, technically precise)
-3. Difficulty must be exactly: "EASY", "MEDIUM", or "HARD"
-4. Category must be the relevant sub-area (e.g., "Backend", "Database", "MongoDB", "CI/CD", "RAG Systems")
-5. Never repeat questions that are too similar to each other
-6. Make questions practical — ask about real-world usage and trade-offs
+1. Questions must be conceptual and open-ended — this is a VOICE interview, no code writing.
+2. CRITICAL: The "question_text" MUST be extremely short, conversational, and direct (maximum 1 or 2 short sentences). Do NOT include long scenarios, examples, or background context in the question text. Keep it simple.
+3. Each question needs a detailed expected answer (4-6 sentences, technically precise).
+4. Difficulty must be exactly: "EASY", "MEDIUM", or "HARD".
+5. Category must be the relevant sub-area.
+6. Never repeat questions that are too similar to each other.
+7. Make questions practical — ask about real-world usage and trade-offs, but keep the phrasing brief.
 
 Return ONLY a valid JSON array with no markdown:
 [
@@ -313,13 +316,26 @@ def generate_technical_questions(role_name: str, resume_skills: list, count: int
 
     random.shuffle(all_topics)
     role_topics_str = "\n".join(f"  - {t}" for t in all_topics)
+    
+    # Shuffle resume skills as well so the LLM doesn't always see them in the same order
+    random.shuffle(resume_skills)
     skills_str = ", ".join(resume_skills[:12]) if resume_skills else "General technical skills"
+
+    random_constraints = [
+        "CRITICAL: Start the interview with an incredibly unique scenario-based question, not a standard definition.",
+        "CRITICAL: Pick a random skill from the middle of the resume list to ask the first question about, not the first one.",
+        "CRITICAL: Frame the first question as a tricky debugging problem rather than a standard theoretical question.",
+        "CRITICAL: Focus the very first question on performance optimization and trade-offs.",
+        "CRITICAL: Ensure the questions are highly varied and completely different from a standard boilerplate interview. Shuffle the order!"
+    ]
+    randomness_constraint = random.choice(random_constraints)
 
     raw = chain.invoke({
         "role_name": role_name,
         "resume_skills": skills_str,
         "role_topics": role_topics_str,
-        "count": count
+        "count": count,
+        "randomness_constraint": randomness_constraint
     })
 
     raw = re.sub(r"```json|```", "", raw).strip()
@@ -344,36 +360,31 @@ def generate_technical_questions(role_name: str, resume_skills: list, count: int
 # ─── ANSWER EVALUATION ────────────────────────────────────────────────────────
 
 EVAL_PROMPT = ChatPromptTemplate.from_template("""
-You are Alex, a senior technical interviewer at TechWing, evaluating a voice interview answer.
+You are Alex, a senior technical interviewer at TechWing. You are doing a VOICE interview.
 
-Role being interviewed for: {technology}
-Question asked: {question_text}
-Ideal answer key points: {expected_answer}
-Candidate's transcribed answer: {transcribed_answer}
+Role: {technology}
+Question: {question_text}
+Expected key points: {expected_answer}
+Candidate's answer: {transcribed_answer}
 
-Evaluate strictly and return a valid JSON object:
+Return ONLY valid JSON — no markdown, no extra text:
 {{
-  "score": <float 1.0-10.0, overall weighted score>,
-  "accuracy_score": <float 1.0-10.0, how technically correct and factually accurate>,
-  "depth_score": <float 1.0-10.0, depth of understanding and real-world application>,
-  "communication_score": <float 1.0-10.0, clarity, structure, and how well-expressed>,
-  "feedback": "<2-3 sentences of spoken feedback. Start with what they got right, then mention gaps. Encouraging but honest. This WILL be spoken aloud to the candidate.>",
-  "follow_up_hint": "<one topic area to probe deeper if needed>"
+  "score": <float 1.0-10.0>,
+  "accuracy_score": <float 1.0-10.0>,
+  "depth_score": <float 1.0-10.0>,
+  "communication_score": <float 1.0-10.0>,
+  "feedback": "<EXACTLY 1 short sentence spoken aloud. Vary your openers: 'Good answer.', 'I see.', 'Noted.', 'Interesting.', 'Thank you.' — then 1 brief comment. DO NOT say 'completely fine' repeatedly.>",
+  "follow_up_hint": "<one word topic>"
 }}
 
-Scoring guide:
-- 9-10: Exceptional, would impress any senior engineer, complete with nuances
-- 7-8: Good, solid understanding, minor gaps
-- 5-6: Adequate, basic knowledge but lacks depth or has errors
-- 3-4: Weak, significant gaps or misunderstandings
-- 1-2: Incorrect, no meaningful answer given, or candidate says "I don't know"
-
-CRITICAL INTERVIEWER BEHAVIOR RULES:
-1. If candidate says "I don't know" or "I am not sure": Score 1.0. In the feedback, do NOT be overly enthusiastic. Act like a real interviewer. Say something like: "That's completely fine, we can move on to the next topic." or "No worries, let's skip this one."
-2. If candidate asks a personal question (e.g. "How are you?", "What's your name?", "Tell me a joke") or goes off-topic: Score 1.0. In the feedback, politely but firmly redirect them: "As your interviewer, I'd like to keep our focus on the technical assessment. Let's continue with the technical questions."
-3. Otherwise, the "feedback" will be SPOKEN ALOUD. Keep it natural, conversational (1-2 sentences max), and start with "Thank you..." or "Good..." or "Interesting answer...".
-
-Return ONLY valid JSON, no markdown.
+Rules:
+- Score 9-10: complete, nuanced answer
+- Score 7-8: good, minor gaps
+- Score 5-6: basic, lacks depth
+- Score 3-4: significant gaps
+- Score 1-2: wrong, empty, or "I don't know"
+- If "I don't know", empty, or wrong: score 1-2, provide a 1-sentence supportive, conversational response acknowledging it before moving on (e.g. "That's perfectly fine, this is a tricky concept. Usually it involves..." or "Not quite, but don't worry. Let's move on."). DO NOT just say 'Alright, let's move on.'
+- If off-topic/making a joke: score 1, feedback like "That's funny, but let's stay focused on the interview for now."
 """)
 
 def evaluate_answer(question_text: str, expected_answer: str,

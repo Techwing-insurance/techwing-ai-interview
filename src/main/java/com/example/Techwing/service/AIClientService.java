@@ -140,29 +140,6 @@ public class AIClientService {
         }
     }
 
-    // ─── CODING FEEDBACK ──────────────────────────────────────────────────────
-
-    public JsonNode getCodingFeedback(String code, String language, String problemDesc,
-                                       int passedCases, int totalCases) {
-        try {
-            Map<String, Object> payload = new HashMap<>();
-            payload.put("code", code);
-            payload.put("language", language);
-            payload.put("problem_description", problemDesc);
-            payload.put("passed_cases", passedCases);
-            payload.put("total_cases", totalCases);
-
-            HttpHeaders headers = jsonHeaders();
-            HttpEntity<String> req = new HttpEntity<>(objectMapper.writeValueAsString(payload), headers);
-            ResponseEntity<JsonNode> resp = restTemplate.exchange(
-                    aiBaseUrl + "/ai/coding/feedback", HttpMethod.POST, req, JsonNode.class);
-            return resp.getBody();
-        } catch (Exception e) {
-            log.error("Coding AI feedback failed: {}", e.getMessage());
-            return null;
-        }
-    }
-
     // ─── REPORT GENERATION ────────────────────────────────────────────────────
 
     public JsonNode generateAIReport(Map<String, Object> reportData) {

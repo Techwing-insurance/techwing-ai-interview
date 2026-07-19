@@ -45,6 +45,7 @@ export const AuthProvider = ({ children }) => {
         const res = await authService.login(data);
         const authData = res.data?.data;
         if (authData && authData.accessToken) {
+            localStorage.removeItem("resumeUploaded"); // Clear previous session resume state
             saveAuth(authData);
             navigate(authData.role === 'ADMIN' ? "/admin" : "/dashboard");
         } else {
@@ -56,6 +57,7 @@ export const AuthProvider = ({ children }) => {
         const res = await authService.register(data);
         const authData = res.data?.data;
         if (authData && authData.accessToken) {
+            localStorage.removeItem("resumeUploaded"); // Clear previous session resume state
             saveAuth(authData);
             navigate(authData.role === 'ADMIN' ? "/admin" : "/dashboard");
         } else {
@@ -71,6 +73,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem("token");
         localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
+        localStorage.removeItem("resumeUploaded");
         setUser(null);
         setIsAuthenticated(false);
         navigate("/login");

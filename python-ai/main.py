@@ -4,7 +4,7 @@ Port: 8000
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import resume_router, technical_router, hr_router, coding_router, report_router, tts_router
+from routers import resume_router, technical_router, hr_router, report_router, tts_router
 
 app = FastAPI(
     title="TechWings AI Service",
@@ -25,7 +25,7 @@ app.add_middleware(
 app.include_router(resume_router.router)
 app.include_router(technical_router.router)
 app.include_router(hr_router.router)
-app.include_router(coding_router.router)
+
 app.include_router(report_router.router)
 app.include_router(tts_router.router)
 

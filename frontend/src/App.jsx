@@ -10,7 +10,10 @@ import HrRoundPage from './pages/HrRoundPage';
 import ReportPage from './pages/ReportPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import TrackDashboardPage from './pages/admin/TrackDashboardPage';
+import AdminStudentProfilePage from './pages/admin/AdminStudentProfilePage';
+import FeedbackPage from './pages/FeedbackPage';
 import NotFoundPage from './pages/NotFoundPage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const ProtectedRoute = ({ children }) => {
     const { isAuthenticated } = useAuth();
@@ -34,24 +37,28 @@ const AdminRoute = ({ children }) => {
 
 function App() {
     return (
-        <div className="min-h-screen bg-techwing-dark text-white font-sans selection:bg-techwing-gold/30">
-            <Routes>
-                <Route path="/" element={<WelcomePage />} />
-                <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
-                <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
-                
-                <Route path="/admin" element={<AdminRoute><AdminDashboardPage /></AdminRoute>} />
-                <Route path="/admin/track/:trackId" element={<AdminRoute><TrackDashboardPage /></AdminRoute>} />
-                
-                <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                <Route path="/interview/technical" element={<ProtectedRoute><TechnicalRoundPage /></ProtectedRoute>} />
-                <Route path="/interview/hr" element={<ProtectedRoute><HrRoundPage /></ProtectedRoute>} />
-                <Route path="/report" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
-                
-                {/* 404 Fallback */}
-                <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-        </div>
+        <ErrorBoundary>
+            <div className="min-h-screen bg-techwing-dark text-white font-sans selection:bg-techwing-gold/30">
+                <Routes>
+                    <Route path="/" element={<WelcomePage />} />
+                    <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+                    <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
+                    
+                    <Route path="/admin" element={<AdminRoute><AdminDashboardPage /></AdminRoute>} />
+                    <Route path="/admin/track/:trackId" element={<AdminRoute><TrackDashboardPage /></AdminRoute>} />
+                    <Route path="/admin/students/:userId" element={<AdminRoute><AdminStudentProfilePage /></AdminRoute>} />
+                    
+                    <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                    <Route path="/interview/technical" element={<ProtectedRoute><TechnicalRoundPage /></ProtectedRoute>} />
+                    <Route path="/interview/hr" element={<ProtectedRoute><HrRoundPage /></ProtectedRoute>} />
+                    <Route path="/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} />
+                    <Route path="/report" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
+                    
+                    {/* 404 Fallback */}
+                    <Route path="*" element={<NotFoundPage />} />
+                </Routes>
+            </div>
+        </ErrorBoundary>
     );
 }
 

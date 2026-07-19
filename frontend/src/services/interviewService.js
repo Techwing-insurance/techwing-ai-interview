@@ -24,3 +24,6 @@ export const completeHrRound = (sessionId) => api.post(`/interview/hr/complete?s
 // Reports
 export const generateReport = (sessionId) => api.post(`/report/generate/${sessionId}`);
 export const getReport = (sessionId) => api.get(`/report/${sessionId}`);
+
+// Feedback
+export const submitFeedback = (data) => api.post('/interview/feedback', data);

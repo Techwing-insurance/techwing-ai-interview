@@ -17,4 +17,7 @@ public interface InterviewService {
     AnswerEvalResponse submitHRAnswer(AnswerRequest request);
     QuestionResponse getNextHRQuestion(Long sessionId);
     void completeHRRound(Long sessionId);
+
+    // Feedback
+    void submitFeedback(com.example.Techwing.payload.FeedbackRequest request, Long userId);
 }

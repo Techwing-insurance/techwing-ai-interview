@@ -34,13 +34,7 @@ public class InterviewConfiguration {
     @Builder.Default
     private Integer technicalTimeMinutes = 25;
 
-    @Column(name = "coding_problem_count", nullable = false)
-    @Builder.Default
-    private Integer codingProblemCount = 2;
 
-    @Column(name = "coding_time_minutes", nullable = false)
-    @Builder.Default
-    private Integer codingTimeMinutes = 60;
 
     @Column(name = "hr_question_count", nullable = false)
     @Builder.Default

@@ -10,7 +10,9 @@ const DashboardPage = () => {
     const navigate = useNavigate();
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
-    const [resumeUploaded, setResumeUploaded] = useState(false);
+    const [resumeUploaded, setResumeUploaded] = useState(() => {
+        return localStorage.getItem('resumeUploaded') === 'true';
+    });
 
     const handleFileChange = async (e) => {
         if (e.target.files && e.target.files[0]) {
@@ -27,6 +29,7 @@ const DashboardPage = () => {
         try {
             await interviewService.uploadResume(formData);
             setResumeUploaded(true);
+            localStorage.setItem('resumeUploaded', 'true');
         } catch (error) {
             console.error('Upload failed', error);
             Swal.fire({
@@ -116,11 +119,29 @@ const DashboardPage = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-xl flex items-center gap-3">
-                                <CheckCircle className="text-green-500 w-6 h-6 flex-shrink-0" />
-                                <div>
-                                    <h4 className="font-bold text-green-500">Resume Analyzed</h4>
-                                    <p className="text-xs text-gray-400">Your interview is ready.</p>
+                            <div className="space-y-3">
+                                <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-xl flex items-center gap-3">
+                                    <CheckCircle className="text-green-500 w-6 h-6 flex-shrink-0" />
+                                    <div>
+                                        <h4 className="font-bold text-green-500">Resume Analyzed</h4>
+                                        <p className="text-xs text-gray-400">Your interview is personalized and ready.</p>
+                                    </div>
+                                </div>
+                                <div className="border-2 border-dashed border-white/10 rounded-xl p-3 text-center hover:border-techwing-gold/50 transition-colors">
+                                    <input 
+                                        type="file" 
+                                        id="resume-reupload" 
+                                        accept=".pdf"
+                                        className="hidden" 
+                                        onChange={handleFileChange} 
+                                        disabled={uploading}
+                                    />
+                                    <label htmlFor="resume-reupload" className={`cursor-pointer flex flex-col items-center gap-1 ${uploading ? 'opacity-50 cursor-wait' : ''}`}>
+                                        <Upload className="w-5 h-5 text-gray-500 mb-1" />
+                                        <span className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+                                            {uploading ? 'Re-uploading...' : 'Re-upload Resume'}
+                                        </span>
+                                    </label>
                                 </div>
                             </div>
                         )}

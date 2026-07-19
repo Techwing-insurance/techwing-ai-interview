@@ -13,7 +13,6 @@ You are an AI hiring assessment expert. Generate a comprehensive final report.
 Candidate: {candidate_name}
 Track: {track_name}
 Technical Score: {technical_score}/100
-Coding Score: {coding_score}/100
 HR Score: {hr_score}/100
 Overall Score: {overall_score}/100
 
@@ -26,8 +25,6 @@ Technical Q&A Summary:
 HR Answers Summary:
 {hr_summary}
 
-Coding Performance:
-{coding_summary}
 
 Generate a detailed report and return valid JSON:
 {{
@@ -72,23 +69,17 @@ def generate_report(data: dict) -> dict:
         f"Q: {a.get('question','')}\nA: {a.get('transcript','')}\nScore: {a.get('overall_hr_score',0)}/10"
         for a in data.get("hr_answers", [])[:5]
     ])
-    coding_summary = "\n".join([
-        f"Problem: {s.get('problem','')}\nPassed: {s.get('passed_cases',0)}/{s.get('total_cases',0)}"
-        for s in data.get("coding_submissions", [])
-    ])
-    
+
     raw = chain.invoke({
         "candidate_name": data["candidate_name"],
         "track_name": data["track_name"],
         "technical_score": data["technical_score"],
-        "coding_score": data["coding_score"],
         "hr_score": data["hr_score"],
         "overall_score": data["overall_score"],
         "resume_skills": ", ".join(data.get("resume_skills", [])),
         "resume_summary": data.get("resume_summary", ""),
         "technical_summary": tech_summary,
-        "hr_summary": hr_summary,
-        "coding_summary": coding_summary
+        "hr_summary": hr_summary
     })
     raw = re.sub(r"```json|```", "", raw).strip()
     return json.loads(raw)

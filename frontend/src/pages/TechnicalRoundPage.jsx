@@ -1,292 +1,475 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoiceAvatar from '../components/VoiceAvatar';
 import TechWingLoader from '../components/TechWingLoader';
+import { useBrowserTTS } from '../hooks/useBrowserTTS';
+import { useBrowserSTT, BROWSER_STT_SUPPORTED } from '../hooks/useBrowserSTT';
 import { useVAD } from '../hooks/useVAD';
 import * as interviewService from '../services/interviewService';
 import { useInterview } from '../context/InterviewContext';
-import { Clock } from 'lucide-react';
+import { Clock, Loader2, Mic, MicOff } from 'lucide-react';
+import Swal from 'sweetalert2';
+
+// ─── Status Display Messages ──────────────────────────────────────────────────
+const STATUS = {
+    IDLE: 'Click "Start Interview" to begin',
+    INITIALIZING: 'Connecting to your interviewer...',
+    AI_SPEAKING: 'Alex is speaking...',
+    LISTENING: 'Listening... speak your answer',
+    PROCESSING: 'Alex is thinking...',
+    TIME_UP: 'Technical round complete!',
+};
 
 const TechnicalRoundPage = () => {
     const navigate = useNavigate();
     const { setSessionId, setCurrentRound } = useInterview();
+
+    // ─── Refs (avoid stale closures) ─────────────────────────────────────────
+    const sessionDataRef = useRef(null);
+    const questionRef = useRef(null);
+    const isTimeUpRef = useRef(false);
+    const isProcessingRef = useRef(false);
+
+    // ─── State ────────────────────────────────────────────────────────────────
+    const [hasStarted, setHasStarted] = useState(false);
+    const [isInitializing, setIsInitializing] = useState(false);
+    const [status, setStatus] = useState(STATUS.IDLE);
     const [isProcessing, setIsProcessing] = useState(false);
-    
-    const handleSpeechEnd = async (audioBlob) => {
-        if (!audioBlob) return;
+    const [timeLeft, setTimeLeft] = useState(null);
+    const [isTimeUp, setIsTimeUp] = useState(false);
+    const [questionNumber, setQuestionNumber] = useState(1);
+    const [volume, setVolume] = useState(0);
+
+    // ─── Hooks ────────────────────────────────────────────────────────────────
+    const { speak, stop: stopTTS, isSpeaking } = useBrowserTTS();
+
+    // ─── Handle answer transcript ─────────────────────────────────────────────
+    const handleTranscriptReady = useCallback(async (transcript) => {
+        if (!transcript || isTimeUpRef.current || isProcessingRef.current) return;
+
+        isProcessingRef.current = true;
         setIsProcessing(true);
-        
+        setStatus(STATUS.PROCESSING);
+
         try {
-            // 1. Send Audio to Whisper for Transcription
-            const audioFormData = new FormData();
-            audioFormData.append('audio', audioBlob, 'answer.webm');
-            
-            let userTranscript = "Transcription skipped / fallback.";
-            try {
-                const transcribeRes = await interviewService.transcribeVoice(audioFormData, 'TECHNICAL');
-                userTranscript = transcribeRes.data;
-            } catch (e) {
-                console.warn("Transcription failed, using fallback text.", e);
+            // Handle "repeat question" naturally
+            const lower = transcript.toLowerCase();
+            if (lower.includes('repeat') || lower.includes("didn't hear") || lower.includes('say that again') || lower.includes('come again')) {
+                isProcessingRef.current = false;
+                setIsProcessing(false);
+                setStatus(STATUS.AI_SPEAKING);
+                await speak("Sure! " + questionRef.current?.text);
+                if (!isTimeUpRef.current) {
+                    setStatus(STATUS.LISTENING);
+                    startListening();
+                }
+                return;
             }
 
-            setTranscript(userTranscript);
-
-            // 2. Send JSON payload to Backend
-            const currentSessionData = sessionDataRef.current;
-            const currentQuestion = questionRef.current;
-
+            // Submit answer to backend (non-blocking: evaluate + save score)
             const payload = {
-                sessionId: currentSessionData?.sessionId,
-                questionOrder: currentQuestion?.order,
-                transcript: userTranscript
+                sessionId: sessionDataRef.current?.sessionId,
+                questionOrder: questionRef.current?.order,
+                transcript,
             };
 
+            // Evaluate answer → get feedback
             const res = await interviewService.answerTechnicalQuestion(payload);
             const evalData = res.data.data;
-            
-            setFeedback(evalData.feedback);
-            
-            // Speak the feedback first, THEN move on
-            await speak(evalData.feedback);
-            
-            // 3. Process Next or Complete
-            if (evalData.nextAvailable) {
-                if (currentSessionData?.sessionId) fetchNextQuestion(currentSessionData.sessionId);
-            } else {
-                setFeedback('Technical Round Complete! Moving to HR Round...');
-                setTimeout(() => navigate('/interview/hr'), 2500);
+
+            if (isTimeUpRef.current) {
+                isProcessingRef.current = false;
+                setIsProcessing(false);
+                return;
             }
 
-        } catch (err) {
-            console.error('Error submitting answer', err);
-            setFeedback('Error processing your answer. Please try again.');
-        } finally {
+            // Fetch next question while composing what to say
+            let nextQuestionText = null;
+            try {
+                const nextRes = await interviewService.getNextTechnicalQuestion(
+                    sessionDataRef.current?.sessionId
+                );
+                const nextData = nextRes.data.data;
+                questionRef.current = { id: nextData.questionId, order: nextData.order, text: nextData.questionText };
+                nextQuestionText = nextData.questionText;
+                setQuestionNumber(nextData.order);
+            } catch (_) {
+                // No more questions — round still continues until timer
+            }
+
+            isProcessingRef.current = false;
             setIsProcessing(false);
+
+            if (isTimeUpRef.current) return;
+
+            // Speak feedback + next question together
+            const toSpeak = nextQuestionText
+                ? `${evalData.feedback}. ${nextQuestionText}`
+                : `${evalData.feedback}. That was the last question. Feel free to elaborate on any previous answer.`;
+
+            setStatus(STATUS.AI_SPEAKING);
+            await speak(toSpeak);
+
+            if (!isTimeUpRef.current) {
+                setStatus(STATUS.LISTENING);
+                startListening();
+            }
+        } catch (err) {
+            console.error('[Technical] Error processing answer:', err);
+            isProcessingRef.current = false;
+            setIsProcessing(false);
+            if (!isTimeUpRef.current) {
+                setStatus(STATUS.AI_SPEAKING);
+                await speak("Sorry, let's move on. " + (questionRef.current?.text || ''));
+                setStatus(STATUS.LISTENING);
+                startListening();
+            }
+        }
+    }, [speak]);
+
+    // ─── Browser STT (primary — Chrome) ──────────────────────────────────────
+    const {
+        isListening: isBrowserListening,
+        interimText,
+        startListening: startBrowserListening,
+        stopListening: stopBrowserListening,
+    } = useBrowserSTT({
+        onTranscriptReady: handleTranscriptReady,
+        silenceDurationMs: 1400,
+        minSpeechMs: 800,
+    });
+
+    // ─── VAD Fallback (Firefox / non-Chrome browsers) ────────────────────────
+    const handleVADSpeechEnd = useCallback(async (audioBlob) => {
+        if (!audioBlob || isTimeUpRef.current || isProcessingRef.current) return;
+
+        isProcessingRef.current = true;
+        setIsProcessing(true);
+        setStatus(STATUS.PROCESSING);
+
+        try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'answer.webm');
+            let transcript = 'No response detected.';
+            try {
+                const res = await interviewService.transcribeVoice(formData, 'TECHNICAL');
+                if (res.data) transcript = res.data;
+            } catch (_) {}
+
+            isProcessingRef.current = false;
+            await handleTranscriptReady(transcript);
+        } catch (err) {
+            console.error('[VAD Fallback] Error:', err);
+            isProcessingRef.current = false;
+            setIsProcessing(false);
+            if (!isTimeUpRef.current) {
+                startVAD();
+                setStatus(STATUS.LISTENING);
+            }
+        }
+    }, [handleTranscriptReady]);
+
+    const {
+        isRecording: isVADRecording,
+        startRecording: startVAD,
+        stopRecording: stopVAD,
+        volume: vadVolume,
+    } = useVAD({
+        onSpeechEnd: handleVADSpeechEnd,
+        silenceDurationMs: 1400,
+        minRecordingMs: 800,
+    });
+
+    // ─── Unified controls (use Browser STT if supported, else VAD) ───────────
+    const startListening = useCallback(() => {
+        if (isTimeUpRef.current) return;
+        if (BROWSER_STT_SUPPORTED) {
+            startBrowserListening();
+        } else {
+            startVAD();
+        }
+        setStatus(STATUS.LISTENING);
+    }, [startBrowserListening, startVAD]);
+
+    const stopListening = useCallback(() => {
+        if (BROWSER_STT_SUPPORTED) {
+            stopBrowserListening();
+        } else {
+            stopVAD();
+        }
+    }, [stopBrowserListening, stopVAD]);
+
+    const isRecording = BROWSER_STT_SUPPORTED ? isBrowserListening : isVADRecording;
+    const displayVolume = BROWSER_STT_SUPPORTED ? (interimText ? 60 : 0) : vadVolume;
+
+    // ─── Cleanup on unmount ───────────────────────────────────────────────────
+    useEffect(() => {
+        return () => {
+            stopTTS();
+            stopListening();
+        };
+    }, []);
+
+    // ─── Start Interview ──────────────────────────────────────────────────────
+    const handleStartInterview = async () => {
+        setIsInitializing(true);
+        setStatus(STATUS.INITIALIZING);
+
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            const res = await interviewService.startTechnicalRound();
+            const data = res.data.data;
+
+            sessionDataRef.current = data;
+            questionRef.current = {
+                id: data.questionId,
+                order: data.questionOrder,
+                text: data.questionText,
+            };
+
+            setSessionId(data.sessionId);
+            setCurrentRound('TECHNICAL');
+            setQuestionNumber(data.questionOrder || 1);
+
+            const timeLimitSeconds = (data.timeLimitMinutes || 5) * 60;
+            setTimeLeft(timeLimitSeconds);
+            setHasStarted(true);
+            setIsInitializing(false);
+
+            // Speak welcome + first question
+            setStatus(STATUS.AI_SPEAKING);
+            await speak(
+                `Hello! Welcome to the Technical Round. I'm Alex, your interviewer today. ` +
+                `We'll go through some technical questions. Please speak your answers clearly. ` +
+                `Here's your first question: ${data.questionText}`
+            );
+
+            if (!isTimeUpRef.current) {
+                setStatus(STATUS.LISTENING);
+                startListening();
+            }
+        } catch (err) {
+            console.error('Failed to start interview:', err);
+            setIsInitializing(false);
+            setStatus(STATUS.IDLE);
+
+            if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+                Swal.fire({
+                    title: 'Microphone Required',
+                    text: 'Please allow microphone access to start the interview.',
+                    icon: 'warning',
+                    background: '#1a1f2b',
+                    color: '#fff',
+                    confirmButtonColor: '#CAA928',
+                });
+            } else {
+                Swal.fire({
+                    title: 'Connection Error',
+                    text: 'Could not start the interview. Please ensure the backend is running.',
+                    icon: 'error',
+                    background: '#1a1f2b',
+                    color: '#fff',
+                    confirmButtonColor: '#CAA928',
+                });
+            }
         }
     };
 
-    const { isRecording, startRecording, stopRecording, volume } = useVAD({
-        onSpeechEnd: handleSpeechEnd
-    });
-    
-    const [sessionData, setSessionDataState] = useState(null);
-    const [question, setQuestionState] = useState(null);
-    const sessionDataRef = useRef(null);
-    const questionRef = useRef(null);
-
-    const setSessionData = (data) => {
-        sessionDataRef.current = data;
-        setSessionDataState(data);
-    };
-
-    const setQuestion = (data) => {
-        questionRef.current = data;
-        setQuestionState(data);
-    };
-
-    const [isSpeaking, setIsSpeaking] = useState(false);
-    const [transcript, setTranscript] = useState('');
-    const [feedback, setFeedback] = useState('');
-    
-    // Timer states
-    const [timeLeft, setTimeLeft] = useState(null);
-    const [isTimeUp, setIsTimeUp] = useState(false);
-    
-    const audioRef = useRef(null);
-
+    // ─── Timer Effect ─────────────────────────────────────────────────────────
     useEffect(() => {
-        const initInterview = async () => {
-            try {
-                const res = await interviewService.startTechnicalRound();
-                const data = res.data.data;
-                setSessionData(data);
-                setSessionId(data.sessionId);
-                setCurrentRound('TECHNICAL');
-                
-                if (data.timeLimitMinutes) {
-                    // Set to 5 minutes as requested
-                    setTimeLeft(5 * 60);
-                }
-
-                setQuestion({
-                    id: data.questionId,
-                    order: data.questionOrder,
-                    text: data.questionText
-                });
-                
-                await speak("Hello, let's start the technical interview. " + data.questionText);
-                startRecording();
-            } catch (err) {
-                console.error('Failed to start interview', err);
-            }
-        };
-        initInterview();
-    }, []);
-
-    // Timer Effect
-    useEffect(() => {
-        if (timeLeft === null || isTimeUp) return;
+        if (!hasStarted || timeLeft === null || isTimeUp) return;
 
         if (timeLeft <= 0) {
             handleTimeUp();
             return;
         }
 
-        const timer = setInterval(() => {
-            setTimeLeft(prev => prev - 1);
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [timeLeft, isTimeUp]);
-
-    const handleTimeUp = () => {
-        setIsTimeUp(true);
-        stopRecording();
-        if (audioRef.current) audioRef.current.pause();
-        
-        // Auto-navigate after 3 seconds
-        setTimeout(() => {
-            navigate('/interview/hr');
-        }, 3000);
-    };
-
-    const formatTime = (seconds) => {
-        if (seconds === null) return "00:00";
-        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        return `${m}:${s}`;
-    };
-
-    const speak = (text) => {
-        return new Promise(async (resolve) => {
-            setIsSpeaking(true);
-            try {
-                // Use Spring Boot proxy — works in production on mobile
-                const token = localStorage.getItem('token');
-                const response = await fetch('/api/voice/speak', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ text, voice: 'female' })
-                });
-                if (!response.ok) throw new Error('TTS Failed');
-                
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                
-                if (audioRef.current) {
-                    audioRef.current.pause();
-                }
-                const audio = new Audio(url);
-                audioRef.current = audio;
-                
-                audio.onended = () => {
-                    setIsSpeaking(false);
-                    resolve();
-                };
-                audio.onerror = (e) => {
-                    console.error('Audio playback error', e);
-                    setIsSpeaking(false);
-                    resolve();
-                };
-                
-                await audio.play();
-            } catch (err) {
-                console.error('TTS error', err);
-                setIsSpeaking(false);
-                resolve();
-            }
-        });
-    };
-
-    const handleStartRecording = () => {
-        if (audioRef.current) {
-            audioRef.current.pause();
-        }
-        setIsSpeaking(false);
-        startRecording();
-    };
-
-    const handleStopRecording = () => {
-        stopRecording();
-    };
-
-    const fetchNextQuestion = async (sessionId) => {
-        try {
-            const res = await interviewService.getNextTechnicalQuestion(sessionId);
-            const data = res.data.data;
-            setQuestion({
-                id: data.questionId,
-                order: data.order,
-                text: data.questionText
+        if (timeLeft === 60) {
+            Swal.fire({
+                title: '⏰ 1 Minute Left!',
+                text: 'Technical round ending soon.',
+                icon: 'warning',
+                timer: 3000,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end',
+                background: '#1a1a1a',
+                color: '#fff',
             });
-            await speak(data.questionText);
-            startRecording();
-        } catch (error) {
-            console.error("Failed to fetch next question", error);
         }
+
+        const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+        return () => clearInterval(timer);
+    }, [timeLeft, isTimeUp, hasStarted]);
+
+    // ─── Time Up ──────────────────────────────────────────────────────────────
+    const handleTimeUp = async () => {
+        if (isTimeUpRef.current) return;
+        isTimeUpRef.current = true;
+        setIsTimeUp(true);
+        setStatus(STATUS.TIME_UP);
+
+        stopListening();
+        stopTTS();
+
+        try {
+            const sid = sessionDataRef.current?.sessionId;
+            if (sid) await interviewService.completeTechnicalRound(sid);
+        } catch (e) {
+            console.error('Failed to complete technical round:', e);
+        }
+
+        // Inform the candidate and navigate
+        await speak('Your technical round is now complete. Moving to the HR round. Good luck!');
+        setTimeout(() => navigate('/interview/hr'), 2000);
     };
 
-    if (!question) {
+    // ─── Format Time ─────────────────────────────────────────────────────────
+    const formatTime = (seconds) => {
+        if (seconds === null || seconds === undefined) return '00:00';
+        const s = Math.max(0, seconds);
+        const m = Math.floor(s / 60).toString().padStart(2, '0');
+        const sec = (s % 60).toString().padStart(2, '0');
+        return `${m}:${sec}`;
+    };
+
+    // ─── Render: Pre-start ────────────────────────────────────────────────────
+    if (!hasStarted) {
         return (
-            <div className="min-h-screen bg-techwing-dark flex items-center justify-center">
-                <TechWingLoader text="Initializing Technical Round..." />
+            <div className="min-h-screen bg-techwing-dark flex items-center justify-center p-6">
+                <div className="glass-panel p-12 text-center max-w-md w-full">
+                    {/* Mic icon */}
+                    <div className="w-20 h-20 bg-techwing-gold/10 border border-techwing-gold/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Mic className="w-10 h-10 text-techwing-gold" />
+                    </div>
+
+                    <h2 className="text-2xl font-bold text-white mb-3">Technical Round</h2>
+                    <p className="text-gray-400 mb-2 text-sm">
+                        AI Interviewer: <span className="text-techwing-gold font-semibold">Alex</span>
+                    </p>
+                    <p className="text-gray-400 mb-8 text-sm leading-relaxed">
+                        This is a <strong className="text-white">voice-only</strong> interview. Alex will ask
+                        you technical questions and listen to your answers. Speak naturally — just as you would
+                        in a real interview.
+                    </p>
+
+                    {!BROWSER_STT_SUPPORTED && (
+                        <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-400 text-xs text-left">
+                            ⚠️ For best performance, use <strong>Google Chrome</strong>. Your browser will use
+                            microphone upload mode instead.
+                        </div>
+                    )}
+
+                    <button
+                        onClick={handleStartInterview}
+                        disabled={isInitializing}
+                        className="btn-primary w-full flex justify-center items-center py-4 gap-2 text-base font-semibold"
+                    >
+                        {isInitializing ? (
+                            <><Loader2 className="w-5 h-5 animate-spin" /> Connecting...</>
+                        ) : (
+                            <><Mic className="w-5 h-5" /> Enable Microphone &amp; Start</>
+                        )}
+                    </button>
+                </div>
             </div>
         );
     }
 
+    // ─── Render: Interview ────────────────────────────────────────────────────
     return (
-        <div className="min-h-screen bg-techwing-dark flex flex-col relative">
-            
-            {/* Time's Up Modal */}
+        <div className="min-h-screen bg-techwing-dark flex flex-col">
+
+            {/* Time's Up Overlay */}
             {isTimeUp && (
-                <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
-                    <div className="glass-panel p-8 text-center max-w-md">
-                        <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Clock className="w-8 h-8" />
+                <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center">
+                    <div className="glass-panel p-10 text-center max-w-sm">
+                        <div className="w-16 h-16 bg-techwing-gold/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Clock className="w-8 h-8 text-techwing-gold" />
                         </div>
-                        <h2 className="text-2xl font-bold text-white mb-2">Time is up!</h2>
-                        <p className="text-gray-300">Submitting your answers and moving to the HR round...</p>
-                        <Loader2 className="w-6 h-6 text-techwing-gold animate-spin mx-auto mt-6" />
+                        <h2 className="text-2xl font-bold text-white mb-2">Round Complete!</h2>
+                        <p className="text-gray-400 mb-4">Moving to the HR Round...</p>
+                        <Loader2 className="w-6 h-6 text-techwing-gold animate-spin mx-auto" />
                     </div>
                 </div>
             )}
 
-            <header className="p-6 border-b border-white/10 flex justify-between items-center">
+            {/* Header */}
+            <header className="flex-shrink-0 px-6 py-4 border-b border-white/10 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    {/* TechWing Logo (Placeholder) */}
-                    <div className="w-10 h-10 bg-techwing-gold/20 rounded-xl flex items-center justify-center border border-techwing-gold/30">
-                        <span className="text-techwing-gold font-bold text-xl">TW</span>
+                    <div className="w-9 h-9 bg-techwing-gold/20 rounded-xl flex items-center justify-center border border-techwing-gold/30">
+                        <span className="text-techwing-gold font-bold text-sm">TW</span>
                     </div>
-                    <h1 className="text-2xl font-bold text-techwing-gold hidden sm:block">TechWing AI</h1>
+                    <div>
+                        <h1 className="text-base font-bold text-white leading-tight">Technical Round</h1>
+                        <p className="text-xs text-gray-500">
+                            Question {questionNumber} &bull; Alex (AI Interviewer)
+                        </p>
+                    </div>
                 </div>
-                
-                {/* Timer UI */}
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-full border ${timeLeft < 60 ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-white/5 border-white/10 text-gray-300'}`}>
-                    <Clock className="w-4 h-4" />
-                    <span className="font-mono font-medium">{formatTime(timeLeft)}</span>
+
+                {/* Timer */}
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-full border font-mono font-semibold text-sm ${
+                    timeLeft !== null && timeLeft < 60
+                        ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse'
+                        : timeLeft !== null && timeLeft < 120
+                        ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400'
+                        : 'bg-white/5 border-white/10 text-gray-300'
+                }`}>
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{formatTime(timeLeft)}</span>
                 </div>
             </header>
 
-            <main className="flex-grow flex items-center justify-center p-6">
-                <div className="glass-panel p-12 flex-1 w-full max-w-2xl text-center flex flex-col items-center justify-center min-h-[500px]">
-                    <h2 className="text-2xl text-techwing-gold mb-8 font-bold">AI Interviewer</h2>
-                    <VoiceAvatar 
+            {/* Main — Centered Voice Interface */}
+            <main className="flex-grow flex flex-col items-center justify-center gap-8 px-6 py-8">
+
+                {/* AI Avatar — the only visual element */}
+                <div className="flex flex-col items-center gap-6">
+                    <VoiceAvatar
                         isListening={isRecording}
                         isSpeaking={isSpeaking}
                         isProcessing={isProcessing}
-                        volume={volume}
-                        onStartListening={handleStartRecording}
-                        onStopListening={handleStopRecording}
+                        volume={displayVolume}
+                        onStartListening={startListening}
+                        onStopListening={stopListening}
                     />
-                    <p className="mt-8 text-gray-400 text-sm">
-                        {isSpeaking ? "Interviewer is speaking..." : isRecording ? "Listening to your answer..." : isProcessing ? "Processing your answer..." : "Click to speak"}
-                    </p>
+
+                    {/* Status text */}
+                    <div className="text-center">
+                        <p className={`text-base font-medium transition-all duration-300 ${
+                            isProcessing ? 'text-yellow-400' :
+                            isSpeaking   ? 'text-blue-400'   :
+                            isRecording  ? 'text-green-400'  : 'text-gray-400'
+                        }`}>
+                            {isSpeaking   ? STATUS.AI_SPEAKING :
+                             isProcessing ? STATUS.PROCESSING  :
+                             isRecording  ? STATUS.LISTENING   : '...'}
+                        </p>
+                    </div>
                 </div>
+
+                {/* Mic hint */}
+                {!isRecording && !isSpeaking && !isProcessing && (
+                    <button
+                        onClick={startListening}
+                        className="flex items-center gap-2 text-sm text-gray-500 hover:text-techwing-gold transition-colors mt-2"
+                    >
+                        <Mic className="w-4 h-4" />
+                        Click to speak your answer
+                    </button>
+                )}
             </main>
-            <audio ref={audioRef} className="hidden" />
+
+            {/* Bottom instruction bar */}
+            <footer className="flex-shrink-0 px-6 py-3 border-t border-white/5 text-center">
+                <p className="text-xs text-gray-600">
+                    {BROWSER_STT_SUPPORTED
+                        ? 'Real-time voice recognition active — stop speaking and Alex will respond'
+                        : 'Speak your answer and pause — Alex will respond after 1.4 seconds of silence'}
+                </p>
+            </footer>
         </div>
     );
 };

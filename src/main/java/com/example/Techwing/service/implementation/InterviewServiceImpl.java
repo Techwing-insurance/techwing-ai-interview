@@ -34,6 +34,7 @@ public class InterviewServiceImpl implements InterviewService {
     private final ResumeRepository resumeRepository;
     private final ResumeAnalysisRepository resumeAnalysisRepository;
     private final AIClientService aiClientService;
+    private final InterviewFeedbackRepository feedbackRepository;
 
     // ─── TECHNICAL ROUND ──────────────────────────────────────────────────────
 
@@ -94,8 +95,17 @@ public class InterviewServiceImpl implements InterviewService {
         List<TechnicalQuestion> sessionQuestions = new ArrayList<>();
         JsonNode aiQuestions = aiClientService.generateTechnicalQuestions(config.getTrack().getName(), skills, qCount);
         
-        if (aiQuestions != null && aiQuestions.has("questions") && aiQuestions.get("questions").isArray()) {
-            for (JsonNode qNode : aiQuestions.get("questions")) {
+        JsonNode questionsArray = null;
+        if (aiQuestions != null) {
+            if (aiQuestions.isArray()) {
+                questionsArray = aiQuestions;
+            } else if (aiQuestions.has("questions") && aiQuestions.get("questions").isArray()) {
+                questionsArray = aiQuestions.get("questions");
+            }
+        }
+
+        if (questionsArray != null) {
+            for (JsonNode qNode : questionsArray) {
                 Difficulty diff = Difficulty.MEDIUM;
                 try {
                     diff = Difficulty.valueOf(qNode.path("difficulty").asText("MEDIUM").toUpperCase());
@@ -263,8 +273,17 @@ public class InterviewServiceImpl implements InterviewService {
             List<TechnicalQuestion> newQuestions = new ArrayList<>();
             JsonNode aiQuestions = aiClientService.generateTechnicalQuestions(session.getTrack().getName(), skills, qCount);
             
-            if (aiQuestions != null && aiQuestions.has("questions") && aiQuestions.get("questions").isArray()) {
-                for (JsonNode qNode : aiQuestions.get("questions")) {
+            JsonNode questionsArray = null;
+            if (aiQuestions != null) {
+                if (aiQuestions.isArray()) {
+                    questionsArray = aiQuestions;
+                } else if (aiQuestions.has("questions") && aiQuestions.get("questions").isArray()) {
+                    questionsArray = aiQuestions.get("questions");
+                }
+            }
+
+            if (questionsArray != null) {
+                for (JsonNode qNode : questionsArray) {
                     Difficulty diff = Difficulty.MEDIUM;
                     try { diff = Difficulty.valueOf(qNode.path("difficulty").asText("MEDIUM").toUpperCase()); } catch (Exception ignored) {}
                     String cat = qNode.path("category").asText("TECHNICAL");
@@ -322,7 +341,7 @@ public class InterviewServiceImpl implements InterviewService {
         InterviewSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
         Double avgScore = technicalAnswerRepository.findAverageScoreBySessionId(sessionId);
-        session.setTechnicalScore(avgScore != null ? avgScore * 10 : 0.0);
+        session.setTechnicalScore(avgScore != null ? avgScore : 0.0); // Already on 0-10 scale
         session.setStatus(SessionStatus.TECHNICAL_COMPLETE);
         session.setTechnicalEndAt(LocalDateTime.now());
         sessionRepository.save(session);
@@ -336,9 +355,8 @@ public class InterviewServiceImpl implements InterviewService {
         InterviewSession session = sessionRepository.findTopByUserIdOrderByCreatedAtDesc(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "userId", userId));
 
-        // Allow after Technical round (coding round is disabled)
-        if (session.getStatus() != SessionStatus.CODING_COMPLETE
-                && session.getStatus() != SessionStatus.TECHNICAL_COMPLETE) {
+        // Allow after Technical round
+        if (session.getStatus() != SessionStatus.TECHNICAL_COMPLETE) {
             // Also allow if already in HR progress (resume scenario)
             if (session.getStatus() != SessionStatus.HR_IN_PROGRESS) {
                 session.setStatus(SessionStatus.TECHNICAL_COMPLETE);
@@ -467,10 +485,31 @@ public class InterviewServiceImpl implements InterviewService {
         InterviewSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
         Double avgHR = hrAnswerRepository.findAverageHRScoreBySessionId(sessionId);
-        session.setHrScore(avgHR != null ? avgHR * 10 : 0.0);
+        session.setHrScore(avgHR != null ? avgHR : 0.0); // Already on 0-10 scale
         session.setStatus(SessionStatus.HR_COMPLETE);
         session.setHrEndAt(LocalDateTime.now());
         sessionRepository.save(session);
         log.info("HR round completed for session: {}", sessionId);
+    }
+
+    // ─── FEEDBACK ─────────────────────────────────────────────────────────────
+    @Override
+    public void submitFeedback(FeedbackRequest request, Long userId) {
+        InterviewSession session = sessionRepository.findById(request.getSessionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Session", "id", request.getSessionId()));
+
+        if (!session.getUser().getId().equals(userId)) {
+            throw new InterviewException("Unauthorized to submit feedback for this session");
+        }
+
+        InterviewFeedback feedback = InterviewFeedback.builder()
+                .session(session)
+                .user(session.getUser())
+                .feedbackText(request.getFeedbackText())
+                .rating(request.getRating())
+                .build();
+
+        feedbackRepository.save(feedback);
+        log.info("Feedback submitted for session: {}", request.getSessionId());
     }
 }

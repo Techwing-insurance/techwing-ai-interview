@@ -40,8 +40,6 @@ public class InterviewSession {
     @Column(name = "technical_score")
     private Double technicalScore;
 
-    @Column(name = "coding_score")
-    private Double codingScore;
 
     @Column(name = "hr_score")
     private Double hrScore;
@@ -59,8 +57,6 @@ public class InterviewSession {
     @Column(name = "technical_end_at")
     private LocalDateTime technicalEndAt;
 
-    @Column(name = "coding_end_at")
-    private LocalDateTime codingEndAt;
 
     @Column(name = "hr_end_at")
     private LocalDateTime hrEndAt;

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 LLM_PROVIDER   = os.getenv("LLM_PROVIDER", "groq")
-LLM_MODEL      = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+LLM_MODEL      = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 GROQ_API_KEY   = os.getenv("GROQ_API_KEY", "")

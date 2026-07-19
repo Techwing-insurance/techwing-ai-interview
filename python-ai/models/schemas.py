@@ -59,19 +59,6 @@ class HREvalResponse(BaseModel):
     overall_hr_score: float
     feedback: str
 
-# ── Coding ────────────────────────────────────────────────────────────────────
-class CodingFeedbackRequest(BaseModel):
-    code: str
-    language: str
-    problem_description: str
-    passed_cases: int
-    total_cases: int
-
-class CodingFeedbackResponse(BaseModel):
-    feedback: str
-    time_complexity: str
-    space_complexity: str
-    suggestions: List[str]
 
 # ── Report ────────────────────────────────────────────────────────────────────
 class ReportGenerateRequest(BaseModel):
@@ -79,12 +66,10 @@ class ReportGenerateRequest(BaseModel):
     candidate_name: str
     track_name: str
     technical_score: float
-    coding_score: float
     hr_score: float
     overall_score: float
     technical_answers: List[dict]
     hr_answers: List[dict]
-    coding_submissions: List[dict]
     resume_skills: List[str]
     resume_summary: str
 

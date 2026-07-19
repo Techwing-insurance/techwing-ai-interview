@@ -77,4 +77,15 @@ public class InterviewController {
         interviewService.completeHRRound(sessionId);
         return ResponseEntity.ok(ApiResponse.success("HR round completed", null));
     }
+
+    // ─── FEEDBACK ─────────────────────────────────────────────────────────────
+
+    @PostMapping("/feedback")
+    public ResponseEntity<ApiResponse<String>> submitFeedback(
+            @Valid @RequestBody FeedbackRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User user = authService.getCurrentUser(userDetails.getUsername());
+        interviewService.submitFeedback(request, user.getId());
+        return ResponseEntity.ok(ApiResponse.success("Feedback submitted successfully", null));
+    }
 }

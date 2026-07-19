@@ -2,7 +2,7 @@ package com.example.Techwing.controller;
 
 import com.example.Techwing.exception.ResourceNotFoundException;
 import com.example.Techwing.models.*;
-import com.example.Techwing.payload.ApiResponse;
+import com.example.Techwing.payload.*;
 import com.example.Techwing.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -21,10 +22,10 @@ public class AdminController {
     private final TechnologyTrackRepository trackRepository;
     private final TechnicalQuestionRepository questionRepository;
     private final HRQuestionRepository hrQuestionRepository;
-    private final CodingProblemRepository problemRepository;
     private final UserRepository userRepository;
     private final InterviewSessionRepository sessionRepository;
     private final InterviewConfigurationRepository configRepository;
+    private final InterviewReportRepository reportRepository;
 
     @GetMapping("/tracks")
     public ResponseEntity<ApiResponse<List<TechnologyTrack>>> getTracks() {
@@ -49,8 +50,6 @@ public class AdminController {
                 .track(savedTrack)
                 .technicalQuestionCount(10)
                 .technicalTimeMinutes(5) // Setting 5 minutes timer as requested
-                .codingProblemCount(0)
-                .codingTimeMinutes(0)
                 .hrQuestionCount(5)
                 .hrTimeMinutes(5)
                 .isActive(true)
@@ -84,8 +83,22 @@ public class AdminController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<InterviewConfiguration>> updateTrackConfig(
             @PathVariable Long id, @RequestBody InterviewConfiguration updated) {
+            
+        TechnologyTrack track = trackRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("TechnologyTrack", "id", id));
+                
         InterviewConfiguration config = configRepository.findByTrackIdAndIsActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("InterviewConfiguration", "trackId", id));
+                .orElseGet(() -> {
+                    InterviewConfiguration newConfig = InterviewConfiguration.builder()
+                            .track(track)
+                            .technicalQuestionCount(10)
+                            .technicalTimeMinutes(5)
+                            .hrQuestionCount(5)
+                            .hrTimeMinutes(5)
+                            .isActive(true)
+                            .build();
+                    return newConfig;
+                });
         if (updated.getTechnicalTimeMinutes() != null) {
             config.setTechnicalTimeMinutes(updated.getTechnicalTimeMinutes());
         }
@@ -97,12 +110,6 @@ public class AdminController {
         }
         if (updated.getHrQuestionCount() != null) {
             config.setHrQuestionCount(updated.getHrQuestionCount());
-        }
-        if (updated.getCodingTimeMinutes() != null) {
-            config.setCodingTimeMinutes(updated.getCodingTimeMinutes());
-        }
-        if (updated.getCodingProblemCount() != null) {
-            config.setCodingProblemCount(updated.getCodingProblemCount());
         }
         return ResponseEntity.ok(ApiResponse.success("Configuration updated", configRepository.save(config)));
     }
@@ -138,17 +145,6 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("Question removed", null));
     }
 
-    @GetMapping("/coding-problems/{trackId}")
-    public ResponseEntity<ApiResponse<List<CodingProblem>>> getProblems(@PathVariable Long trackId) {
-        return ResponseEntity.ok(ApiResponse.success(problemRepository.findByTrackIdAndIsActiveTrue(trackId)));
-    }
-
-    @PostMapping("/coding-problems")
-    public ResponseEntity<ApiResponse<CodingProblem>> addProblem(@RequestBody CodingProblem p) {
-        p.setIsActive(true);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Problem added", problemRepository.save(p)));
-    }
 
     @GetMapping("/hr-questions")
     public ResponseEntity<ApiResponse<List<HRQuestion>>> getHRQuestions() {
@@ -217,5 +213,47 @@ public class AdminController {
         u.setIsActive(active);
         userRepository.save(u);
         return ResponseEntity.ok(ApiResponse.success("User " + (active ? "activated" : "deactivated"), null));
+    }
+
+    // ─── STUDENT PROFILE ──────────────────────────────────────────────────────
+
+    @GetMapping("/students/{userId}")
+    public ResponseEntity<ApiResponse<StudentProfileDTO>> getStudentProfile(@PathVariable Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        List<InterviewReport> reports = reportRepository.findByUserIdOrderByGeneratedAtDesc(userId);
+
+        List<ReportSummaryDTO> reportDTOs = reports.stream().map(r -> ReportSummaryDTO.builder()
+                .id(r.getId())
+                .technicalScore(r.getTechnicalScore())
+                .hrScore(r.getHrScore())
+                .overallScore(r.getOverallScore())
+                .recommendation(r.getRecommendation() != null ? r.getRecommendation().name() : null)
+                .aiSummary(r.getAiSummary())
+                .generatedAt(r.getGeneratedAt())
+                .build()
+        ).collect(Collectors.toList());
+
+        Double averageScore = reports.stream()
+                .filter(r -> r.getOverallScore() != null)
+                .mapToDouble(InterviewReport::getOverallScore)
+                .average()
+                .orElse(0.0);
+
+        StudentProfileDTO dto = StudentProfileDTO.builder()
+                .userId(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .pinNumber(user.getPinNumber())
+                .year(user.getYear() != null ? String.valueOf(user.getYear()) : null)
+                .branch(user.getBranch())
+                .college(user.getCollege())
+                .totalInterviews(reportDTOs.size())
+                .averageOverallScore(averageScore)
+                .pastReports(reportDTOs)
+                .build();
+
+        return ResponseEntity.ok(ApiResponse.success(dto));
     }
 }

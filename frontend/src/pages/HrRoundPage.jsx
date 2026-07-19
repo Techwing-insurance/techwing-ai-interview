@@ -1,351 +1,483 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoiceAvatar from '../components/VoiceAvatar';
 import TechWingLoader from '../components/TechWingLoader';
+import { useBrowserTTS } from '../hooks/useBrowserTTS';
+import { useBrowserSTT, BROWSER_STT_SUPPORTED } from '../hooks/useBrowserSTT';
 import { useVAD } from '../hooks/useVAD';
 import * as interviewService from '../services/interviewService';
 import { useInterview } from '../context/InterviewContext';
-import { Clock, Users } from 'lucide-react';
+import { Clock, Loader2, Mic, Users } from 'lucide-react';
+import Swal from 'sweetalert2';
+
+// ─── Status Display Messages ──────────────────────────────────────────────────
+const STATUS = {
+    IDLE: 'Click "Start HR Round" to begin',
+    INITIALIZING: 'Connecting to your HR interviewer...',
+    AI_SPEAKING: 'Priya is speaking...',
+    LISTENING: 'Listening... speak your answer',
+    PROCESSING: 'Priya is thinking...',
+    TIME_UP: 'HR round complete!',
+};
 
 const HrRoundPage = () => {
     const navigate = useNavigate();
-    const { setSessionId, setCurrentRound } = useInterview();
-    const [isProcessing, setIsProcessing] = useState(false);
+    const { sessionId: contextSessionId, setSessionId, setCurrentRound } = useInterview();
 
-    // Timer state — 20 min default
+    // ─── Refs (avoid stale closures) ─────────────────────────────────────────
+    const sessionDataRef = useRef(null);
+    const questionRef = useRef(null);
+    const isTimeUpRef = useRef(false);
+    const isProcessingRef = useRef(false);
+
+    // ─── State ────────────────────────────────────────────────────────────────
+    const [hasStarted, setHasStarted] = useState(false);
+    const [isInitializing, setIsInitializing] = useState(false);
+    const [status, setStatus] = useState(STATUS.IDLE);
+    const [isProcessing, setIsProcessing] = useState(false);
     const [timeLeft, setTimeLeft] = useState(null);
     const [isTimeUp, setIsTimeUp] = useState(false);
+    const [questionNumber, setQuestionNumber] = useState(1);
 
-    const handleSpeechEnd = async (audioBlob) => {
-        if (!audioBlob) return;
+    // ─── Hooks ────────────────────────────────────────────────────────────────
+    const { speak, stop: stopTTS, isSpeaking } = useBrowserTTS();
+
+    // ─── Handle answer transcript ─────────────────────────────────────────────
+    const handleTranscriptReady = useCallback(async (transcript) => {
+        if (!transcript || isTimeUpRef.current || isProcessingRef.current) return;
+
+        isProcessingRef.current = true;
         setIsProcessing(true);
+        setStatus(STATUS.PROCESSING);
 
         try {
-            // 1. Send Audio to Whisper for Transcription
-            const audioFormData = new FormData();
-            audioFormData.append('audio', audioBlob, 'answer.webm');
-
-            let userTranscript = "No response given.";
-            try {
-                const transcribeRes = await interviewService.transcribeVoice(audioFormData, 'HR');
-                userTranscript = transcribeRes.data;
-            } catch (e) {
-                console.warn("Transcription failed, using fallback text.", e);
+            // Handle "repeat question" naturally
+            const lower = transcript.toLowerCase();
+            if (lower.includes('repeat') || lower.includes("didn't hear") || lower.includes('say that again') || lower.includes('come again')) {
+                isProcessingRef.current = false;
+                setIsProcessing(false);
+                setStatus(STATUS.AI_SPEAKING);
+                await speak("Of course! " + questionRef.current?.text);
+                if (!isTimeUpRef.current) {
+                    setStatus(STATUS.LISTENING);
+                    startListening();
+                }
+                return;
             }
 
-            setTranscript(userTranscript);
-
-            // 2. Send JSON payload to Backend for AI evaluation
-            const currentSessionData = sessionDataRef.current;
-            const currentQuestion = questionRef.current;
-
+            // Submit answer → get HR evaluation + feedback
             const payload = {
-                sessionId: currentSessionData?.sessionId,
-                questionOrder: currentQuestion?.order,
-                transcript: userTranscript
+                sessionId: sessionDataRef.current?.sessionId,
+                questionOrder: questionRef.current?.order,
+                transcript,
             };
 
             const res = await interviewService.answerHrQuestion(payload);
             const evalData = res.data.data;
 
-            setFeedback(evalData.feedback);
-
-            // Speak feedback, then move on
-            await speak(evalData.feedback);
-
-            // Always fetch next (infinite mode — timer controls end)
-            if (currentSessionData?.sessionId) {
-                fetchNextQuestion(currentSessionData.sessionId);
+            if (isTimeUpRef.current) {
+                isProcessingRef.current = false;
+                setIsProcessing(false);
+                return;
             }
 
-        } catch (err) {
-            console.error('Error submitting HR answer', err);
-            setFeedback('There was an issue processing your answer. Let us move on.');
-        } finally {
+            // Fetch next HR question
+            let nextQuestionText = null;
+            try {
+                const nextRes = await interviewService.getNextHrQuestion(
+                    sessionDataRef.current?.sessionId
+                );
+                const nextData = nextRes.data.data;
+                questionRef.current = { id: nextData.questionId, order: nextData.order, text: nextData.questionText };
+                nextQuestionText = nextData.questionText;
+                setQuestionNumber(nextData.order);
+            } catch (_) {
+                // No more questions — continue until timer
+            }
+
+            isProcessingRef.current = false;
             setIsProcessing(false);
+
+            if (isTimeUpRef.current) return;
+
+            // Speak feedback + next question together
+            const toSpeak = nextQuestionText
+                ? `${evalData.feedback}. ${nextQuestionText}`
+                : `${evalData.feedback}. That covers all our questions. Feel free to add anything about yourself.`;
+
+            setStatus(STATUS.AI_SPEAKING);
+            await speak(toSpeak);
+
+            if (!isTimeUpRef.current) {
+                setStatus(STATUS.LISTENING);
+                startListening();
+            }
+        } catch (err) {
+            console.error('[HR] Error processing answer:', err);
+            isProcessingRef.current = false;
+            setIsProcessing(false);
+            if (!isTimeUpRef.current) {
+                setStatus(STATUS.AI_SPEAKING);
+                await speak("Let's continue. " + (questionRef.current?.text || ''));
+                setStatus(STATUS.LISTENING);
+                startListening();
+            }
+        }
+    }, [speak]);
+
+    // ─── Browser STT (primary — Chrome) ──────────────────────────────────────
+    const {
+        isListening: isBrowserListening,
+        interimText,
+        startListening: startBrowserListening,
+        stopListening: stopBrowserListening,
+    } = useBrowserSTT({
+        onTranscriptReady: handleTranscriptReady,
+        silenceDurationMs: 1400,
+        minSpeechMs: 800,
+    });
+
+    // ─── VAD Fallback (Firefox / non-Chrome browsers) ────────────────────────
+    const handleVADSpeechEnd = useCallback(async (audioBlob) => {
+        if (!audioBlob || isTimeUpRef.current || isProcessingRef.current) return;
+        isProcessingRef.current = true;
+        setIsProcessing(true);
+        setStatus(STATUS.PROCESSING);
+
+        try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'answer.webm');
+            let transcript = 'No response detected.';
+            try {
+                const res = await interviewService.transcribeVoice(formData, 'HR');
+                if (res.data) transcript = res.data;
+            } catch (_) {}
+
+            isProcessingRef.current = false;
+            await handleTranscriptReady(transcript);
+        } catch (err) {
+            console.error('[VAD Fallback HR] Error:', err);
+            isProcessingRef.current = false;
+            setIsProcessing(false);
+            if (!isTimeUpRef.current) {
+                startVAD();
+                setStatus(STATUS.LISTENING);
+            }
+        }
+    }, [handleTranscriptReady]);
+
+    const {
+        isRecording: isVADRecording,
+        startRecording: startVAD,
+        stopRecording: stopVAD,
+        volume: vadVolume,
+    } = useVAD({
+        onSpeechEnd: handleVADSpeechEnd,
+        silenceDurationMs: 1400,
+        minRecordingMs: 800,
+    });
+
+    // ─── Unified controls ─────────────────────────────────────────────────────
+    const startListening = useCallback(() => {
+        if (isTimeUpRef.current) return;
+        if (BROWSER_STT_SUPPORTED) {
+            startBrowserListening();
+        } else {
+            startVAD();
+        }
+        setStatus(STATUS.LISTENING);
+    }, [startBrowserListening, startVAD]);
+
+    const stopListening = useCallback(() => {
+        if (BROWSER_STT_SUPPORTED) {
+            stopBrowserListening();
+        } else {
+            stopVAD();
+        }
+    }, [stopBrowserListening, stopVAD]);
+
+    const isRecording = BROWSER_STT_SUPPORTED ? isBrowserListening : isVADRecording;
+    const displayVolume = BROWSER_STT_SUPPORTED ? (interimText ? 60 : 0) : vadVolume;
+
+    // ─── Cleanup on unmount ───────────────────────────────────────────────────
+    useEffect(() => {
+        return () => {
+            stopTTS();
+            stopListening();
+        };
+    }, []);
+
+    // ─── Start Interview ──────────────────────────────────────────────────────
+    const handleStartInterview = async () => {
+        setIsInitializing(true);
+        setStatus(STATUS.INITIALIZING);
+
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            const res = await interviewService.startHrRound();
+            const data = res.data.data;
+
+            sessionDataRef.current = data;
+            questionRef.current = {
+                id: data.questionId,
+                order: data.questionOrder,
+                text: data.questionText,
+            };
+
+            setSessionId(data.sessionId);
+            setCurrentRound('HR');
+            setQuestionNumber(data.questionOrder || 1);
+
+            const timeLimitSeconds = (data.timeLimitMinutes || 15) * 60;
+            setTimeLeft(timeLimitSeconds);
+            setHasStarted(true);
+            setIsInitializing(false);
+
+            // Speak welcome + first question
+            setStatus(STATUS.AI_SPEAKING);
+            await speak(
+                `Hello! Welcome to the HR Round. I'm Priya, your HR interviewer. ` +
+                `This is a conversational round — please answer naturally and confidently. ` +
+                `Let's begin. ${data.questionText}`
+            );
+
+            if (!isTimeUpRef.current) {
+                setStatus(STATUS.LISTENING);
+                startListening();
+            }
+        } catch (err) {
+            console.error('Failed to start HR round:', err);
+            setIsInitializing(false);
+            setStatus(STATUS.IDLE);
+
+            if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+                Swal.fire({
+                    title: 'Microphone Required',
+                    text: 'Please allow microphone access to start the HR round.',
+                    icon: 'warning',
+                    background: '#1a1f2b',
+                    color: '#fff',
+                    confirmButtonColor: '#CAA928',
+                });
+            } else {
+                Swal.fire({
+                    title: 'Connection Error',
+                    text: 'Could not start the HR round. Please check your connection.',
+                    icon: 'error',
+                    background: '#1a1f2b',
+                    color: '#fff',
+                    confirmButtonColor: '#CAA928',
+                });
+            }
         }
     };
 
-    const { isRecording, startRecording, stopRecording, volume } = useVAD({
-        onSpeechEnd: handleSpeechEnd
-    });
-
-    const [sessionData, setSessionDataState] = useState(null);
-    const [question, setQuestionState] = useState(null);
-    const sessionDataRef = useRef(null);
-    const questionRef = useRef(null);
-
-    const setSessionData = (data) => {
-        sessionDataRef.current = data;
-        setSessionDataState(data);
-    };
-
-    const setQuestion = (data) => {
-        questionRef.current = data;
-        setQuestionState(data);
-    };
-
-    const [isSpeaking, setIsSpeaking] = useState(false);
-    const [transcript, setTranscript] = useState('');
-    const [feedback, setFeedback] = useState('');
-    const audioRef = useRef(null);
-
+    // ─── Timer Effect ─────────────────────────────────────────────────────────
     useEffect(() => {
-        const initInterview = async () => {
-            try {
-                const res = await interviewService.startHrRound();
-                const data = res.data.data;
-                setSessionData(data);
-                setSessionId(data.sessionId);
-                setCurrentRound('HR');
-
-                // Set timer from config (fallback: 20 minutes)
-                const minutes = data.timeLimitMinutes || 20;
-                setTimeLeft(minutes * 60);
-
-                setQuestion({
-                    id: data.questionId,
-                    order: data.questionOrder,
-                    text: data.questionText
-                });
-
-                await speak("Hello! Welcome to the HR round. I'm Priya, your HR interviewer. " + data.questionText);
-                startRecording();
-            } catch (err) {
-                console.error('Failed to start HR round', err);
-                setFeedback('Failed to start HR round. Please check that all services are running.');
-            }
-        };
-        initInterview();
-    }, []);
-
-    // Timer Effect
-    useEffect(() => {
-        if (timeLeft === null || isTimeUp) return;
+        if (!hasStarted || timeLeft === null || isTimeUp) return;
 
         if (timeLeft <= 0) {
             handleTimeUp();
             return;
         }
 
-        const timer = setInterval(() => {
-            setTimeLeft(prev => prev - 1);
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [timeLeft, isTimeUp]);
-
-    const handleTimeUp = () => {
-        setIsTimeUp(true);
-        stopRecording();
-        if (audioRef.current) audioRef.current.pause();
-        setTimeout(() => navigate('/report'), 3000);
-    };
-
-    const formatTime = (seconds) => {
-        if (seconds === null) return "00:00";
-        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        return `${m}:${s}`;
-    };
-
-    const speak = (text) => {
-        return new Promise(async (resolve) => {
-            setIsSpeaking(true);
-            try {
-                // Use Spring Boot proxy — works in production on mobile
-                const token = localStorage.getItem('token');
-                const response = await fetch('/api/voice/speak', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ text, voice: 'female' })
-                });
-                if (!response.ok) throw new Error('TTS Failed');
-
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-
-                if (audioRef.current) {
-                    audioRef.current.pause();
-                }
-                const audio = new Audio(url);
-                audioRef.current = audio;
-
-                audio.onended = () => {
-                    setIsSpeaking(false);
-                    resolve();
-                };
-                audio.onerror = (e) => {
-                    console.error('Audio playback error', e);
-                    setIsSpeaking(false);
-                    resolve();
-                };
-
-                await audio.play();
-            } catch (err) {
-                console.error('TTS error', err);
-                setIsSpeaking(false);
-                resolve();
-            }
-        });
-    };
-
-    const handleStartRecording = () => {
-        if (audioRef.current) audioRef.current.pause();
-        setIsSpeaking(false);
-        startRecording();
-    };
-
-    const handleStopRecording = () => stopRecording();
-
-    const fetchNextQuestion = async (sessionId) => {
-        setTranscript('');
-        setFeedback('');
-        try {
-            const res = await interviewService.getNextHrQuestion(sessionId);
-            const data = res.data.data;
-            setQuestion({
-                id: data.questionId,
-                order: data.order,
-                text: data.questionText
+        if (timeLeft === 60) {
+            Swal.fire({
+                title: '⏰ 1 Minute Left!',
+                text: 'HR round ending soon.',
+                icon: 'warning',
+                timer: 3000,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end',
+                background: '#1a1a1a',
+                color: '#fff',
             });
-            await speak(data.questionText);
-            startRecording();
-        } catch (error) {
-            console.error("Failed to fetch next HR question", error);
-            setFeedback("We have completed your HR assessment. Thank you!");
-            setTimeout(() => navigate('/report'), 3000);
         }
+
+        const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+        return () => clearInterval(timer);
+    }, [timeLeft, isTimeUp, hasStarted]);
+
+    // ─── Time Up ──────────────────────────────────────────────────────────────
+    const handleTimeUp = async () => {
+        if (isTimeUpRef.current) return;
+        isTimeUpRef.current = true;
+        setIsTimeUp(true);
+        setStatus(STATUS.TIME_UP);
+
+        stopListening();
+        stopTTS();
+
+        try {
+            const sid = sessionDataRef.current?.sessionId;
+            if (sid) await interviewService.completeHrRound(sid);
+        } catch (e) {
+            console.error('Failed to complete HR round:', e);
+        }
+
+        await speak('Your HR round is now complete. Thank you for your time. Please share your feedback next.');
+        setTimeout(() => navigate('/feedback'), 2500);
     };
 
-    if (!question) {
+
+    // ─── Format Time ─────────────────────────────────────────────────────────
+    const formatTime = (seconds) => {
+        if (seconds === null || seconds === undefined) return '00:00';
+        const s = Math.max(0, seconds);
+        const m = Math.floor(s / 60).toString().padStart(2, '0');
+        const sec = (s % 60).toString().padStart(2, '0');
+        return `${m}:${sec}`;
+    };
+
+    // ─── Render: Pre-start ────────────────────────────────────────────────────
+    if (!hasStarted) {
         return (
-            <div className="min-h-screen bg-techwing-dark flex items-center justify-center">
-                <TechWingLoader text="Initializing HR Round..." />
+            <div className="min-h-screen bg-techwing-dark flex items-center justify-center p-6">
+                <div className="glass-panel p-12 text-center max-w-md w-full">
+                    <div className="w-20 h-20 bg-orange-500/10 border border-orange-500/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Users className="w-10 h-10 text-orange-400" />
+                    </div>
+
+                    <h2 className="text-2xl font-bold text-white mb-3">HR Round</h2>
+                    <p className="text-gray-400 mb-2 text-sm">
+                        HR Interviewer: <span className="text-orange-400 font-semibold">Priya</span>
+                    </p>
+                    <p className="text-gray-400 mb-8 text-sm leading-relaxed">
+                        This is a <strong className="text-white">voice conversation</strong> with Priya, your HR
+                        interviewer. Answer naturally and confidently — just as you would in a real HR interview.
+                    </p>
+
+                    {!BROWSER_STT_SUPPORTED && (
+                        <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-400 text-xs text-left">
+                            ⚠️ For best performance, use <strong>Google Chrome</strong>.
+                        </div>
+                    )}
+
+                    <button
+                        onClick={handleStartInterview}
+                        disabled={isInitializing}
+                        className="w-full flex justify-center items-center py-4 gap-2 text-base font-semibold rounded-xl transition-all text-white"
+                        style={{
+                            background: isInitializing
+                                ? '#6b7280'
+                                : 'linear-gradient(135deg, #f97316, #ea580c)',
+                            cursor: isInitializing ? 'not-allowed' : 'pointer',
+                        }}
+                    >
+                        {isInitializing ? (
+                            <><Loader2 className="w-5 h-5 animate-spin" /> Connecting...</>
+                        ) : (
+                            <><Mic className="w-5 h-5" /> Enable Microphone &amp; Start HR Round</>
+                        )}
+                    </button>
+                </div>
             </div>
         );
     }
 
+    // ─── Render: Interview ────────────────────────────────────────────────────
     return (
-        <div className="min-h-screen bg-techwing-dark flex flex-col relative">
+        <div className="min-h-screen bg-techwing-dark flex flex-col">
 
             {/* Time's Up Overlay */}
             {isTimeUp && (
-                <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
-                    <div className="glass-panel p-8 text-center max-w-md">
-                        <div className="w-16 h-16 bg-techwing-orange/20 text-techwing-orange rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Clock className="w-8 h-8" />
+                <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center">
+                    <div className="glass-panel p-10 text-center max-w-sm">
+                        <div className="w-16 h-16 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Clock className="w-8 h-8 text-orange-400" />
                         </div>
                         <h2 className="text-2xl font-bold text-white mb-2">HR Round Complete!</h2>
-                        <p className="text-gray-300">Generating your interview report...</p>
-                        <div className="mt-4 h-1 bg-white/10 rounded-full overflow-hidden">
-                            <div className="h-full bg-techwing-gold rounded-full animate-pulse w-3/4"></div>
+                        <p className="text-gray-400 mb-4">Generating your interview report...</p>
+                        <div className="flex items-center justify-center gap-2">
+                            <Loader2 className="w-5 h-5 text-techwing-gold animate-spin" />
+                            <span className="text-sm text-gray-500">Please wait</span>
                         </div>
                     </div>
                 </div>
             )}
 
             {/* Header */}
-            <header className="p-6 border-b border-white/10 flex justify-between items-center">
+            <header className="flex-shrink-0 px-6 py-4 border-b border-white/10 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-techwing-orange/20 rounded-xl flex items-center justify-center border border-techwing-orange/30">
-                        <Users className="w-5 h-5 text-techwing-orange" />
+                    <div className="w-9 h-9 bg-orange-500/20 rounded-xl flex items-center justify-center border border-orange-500/30">
+                        <Users className="w-4 h-4 text-orange-400" />
                     </div>
                     <div>
-                        <h1 className="text-lg font-bold text-white">HR Round</h1>
-                        <p className="text-xs text-gray-400">Question {question.order}</p>
+                        <h1 className="text-base font-bold text-white leading-tight">HR Round</h1>
+                        <p className="text-xs text-gray-500">
+                            Question {questionNumber} &bull; Priya (HR Interviewer)
+                        </p>
                     </div>
                 </div>
 
-                {/* Timer */}
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-full border font-mono font-medium ${
-                    timeLeft !== null && timeLeft < 120
-                        ? 'bg-red-500/20 border-red-500/50 text-red-400'
-                        : 'bg-white/5 border-white/10 text-gray-300'
-                }`}>
-                    <Clock className="w-4 h-4" />
-                    <span>{formatTime(timeLeft)}</span>
+                <div className="flex items-center gap-3">
+                    {/* Timer */}
+                    <div className={`flex items-center gap-2 px-4 py-2 rounded-full border font-mono font-semibold text-sm ${
+                        timeLeft !== null && timeLeft < 60
+                            ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse'
+                            : timeLeft !== null && timeLeft < 120
+                            ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400'
+                            : 'bg-white/5 border-white/10 text-gray-300'
+                    }`}>
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{formatTime(timeLeft)}</span>
+                    </div>
+
                 </div>
             </header>
 
-            {/* Main Content */}
-            <main className="flex-grow flex flex-col lg:flex-row items-center justify-center p-6 gap-8">
+            {/* Main — Centered Voice Interface */}
+            <main className="flex-grow flex flex-col items-center justify-center gap-8 px-6 py-8">
 
-                {/* Left — Voice Avatar */}
-                <div className="glass-panel p-8 w-full max-w-sm text-center flex flex-col items-center">
-                    <h2 className="text-lg font-bold text-techwing-orange mb-6">Priya — HR Interviewer</h2>
+                {/* AI Avatar */}
+                <div className="flex flex-col items-center gap-6">
                     <VoiceAvatar
                         isListening={isRecording}
                         isSpeaking={isSpeaking}
                         isProcessing={isProcessing}
-                        volume={volume}
-                        onStartListening={handleStartRecording}
-                        onStopListening={handleStopRecording}
+                        volume={displayVolume}
+                        onStartListening={startListening}
+                        onStopListening={stopListening}
                     />
-                    <p className="mt-6 text-gray-400 text-sm">
-                        {isSpeaking
-                            ? "Priya is speaking..."
-                            : isRecording
-                            ? "Listening to your answer..."
-                            : isProcessing
-                            ? "Evaluating your response..."
-                            : "Click the mic to speak"}
-                    </p>
-                </div>
 
-                {/* Right — Question & Feedback */}
-                <div className="flex-1 w-full max-w-xl space-y-5">
-                    {/* Question */}
-                    <div className="glass-panel p-6">
-                        <h3 className="text-gray-400 mb-3 uppercase text-xs tracking-widest font-semibold flex items-center gap-2">
-                            <span className="w-5 h-5 bg-techwing-orange text-white rounded-full flex items-center justify-center text-xs font-bold">
-                                {question.order}
-                            </span>
-                            HR Question
-                        </h3>
-                        <p className="text-xl leading-relaxed text-white">{question.text}</p>
-                    </div>
+                    {/* Status */}
+                    <div className="text-center">
+                        <p className={`text-base font-medium transition-all duration-300 ${
+                            isProcessing ? 'text-yellow-400' :
+                            isSpeaking   ? 'text-orange-400'  :
+                            isRecording  ? 'text-green-400'   : 'text-gray-400'
+                        }`}>
+                            {isSpeaking   ? STATUS.AI_SPEAKING :
+                             isProcessing ? STATUS.PROCESSING  :
+                             isRecording  ? STATUS.LISTENING   : '...'}
+                        </p>
 
-                    {/* Your Answer */}
-                    {transcript && (
-                        <div className="glass-panel p-5 border-l-4 border-l-techwing-gold">
-                            <h3 className="text-gray-400 mb-2 uppercase text-xs tracking-widest font-semibold">Your Answer</h3>
-                            <p className="text-gray-200 italic">"{transcript}"</p>
-                        </div>
-                    )}
-
-                    {/* Feedback */}
-                    {feedback && (
-                        <div className="bg-techwing-orange/10 border border-techwing-orange/30 p-5 rounded-2xl">
-                            <h3 className="text-techwing-orange mb-2 uppercase text-xs tracking-widest font-bold">Interviewer Feedback</h3>
-                            <p className="text-gray-200">{feedback}</p>
-                        </div>
-                    )}
-
-                    {/* Skip / Finish buttons */}
-                    <div className="flex justify-end gap-3">
-                        <button
-                            onClick={() => {
-                                if (sessionData?.sessionId) fetchNextQuestion(sessionData.sessionId);
-                            }}
-                            disabled={isProcessing || isSpeaking}
-                            className="btn-secondary text-sm px-4 py-2 disabled:opacity-40"
-                        >
-                            Skip Question
-                        </button>
-                        <button
-                            onClick={() => navigate('/report')}
-                            className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-2"
-                        >
-                            End Interview
-                        </button>
+                        {/* Real-time interim transcript (Removed per user request) */}
                     </div>
                 </div>
+
+                {/* Mic hint */}
+                {!isRecording && !isSpeaking && !isProcessing && (
+                    <button
+                        onClick={startListening}
+                        className="flex items-center gap-2 text-sm text-gray-500 hover:text-orange-400 transition-colors mt-2"
+                    >
+                        <Mic className="w-4 h-4" />
+                        Click to speak your answer
+                    </button>
+                )}
             </main>
-            <audio ref={audioRef} className="hidden" />
+
+            {/* Footer */}
+            <footer className="flex-shrink-0 px-6 py-3 border-t border-white/5 text-center">
+                <p className="text-xs text-gray-600">
+                    {BROWSER_STT_SUPPORTED
+                        ? 'Real-time voice recognition active — stop speaking and Priya will respond'
+                        : 'Speak your answer and pause — Priya will respond after 1.4 seconds of silence'}
+                </p>
+            </footer>
         </div>
     );
 };

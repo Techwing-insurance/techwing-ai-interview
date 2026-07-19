@@ -25,7 +25,6 @@ public class ReportServiceImpl implements ReportService {
     private final LearningRoadmapRepository roadmapRepository;
     private final TechnicalAnswerRepository technicalAnswerRepository;
     private final HRAnswerRepository hrAnswerRepository;
-    private final CodingSubmissionRepository submissionRepository;
     private final NotificationService notificationService;
 
     @Override
@@ -38,71 +37,167 @@ public class ReportServiceImpl implements ReportService {
         session.setStatus(SessionStatus.EVALUATING);
         sessionRepository.save(session);
 
-        // Calculate scores
-        Double technicalScore = technicalAnswerRepository.findAverageScoreBySessionId(sessionId);
-        Double hrScore = hrAnswerRepository.findAverageHRScoreBySessionId(sessionId);
-        double techScore = technicalScore != null ? technicalScore * 10 : 0;
-        double codingScore = session.getCodingScore() != null ? session.getCodingScore() : 0;
-        double hrFinalScore = hrScore != null ? hrScore * 10 : 0;
+        // ─── Fetch real answers from DB ───────────────────────────────────────
+        List<TechnicalAnswer> techAnswers = technicalAnswerRepository.findBySessionIdOrderByQuestionOrder(sessionId);
+        List<HRAnswer> hrAnswers = hrAnswerRepository.findBySessionIdOrderByQuestionOrder(sessionId);
 
-        // Weighted overall: Technical 40%, Coding 35%, HR 25%
-        double overallScore = (techScore * 0.40) + (codingScore * 0.35) + (hrFinalScore * 0.25);
+        // Technical overall score: average of all AI-scored answers (1-10 scale)
+        double techScore = techAnswers.stream()
+                .filter(a -> a.getScore() != null)
+                .mapToDouble(TechnicalAnswer::getScore)
+                .average().orElse(0.0);
 
+        // HR overall score: average of overall_hr_score per answer (1-10 scale)
+        double hrFinalScore = hrAnswers.stream()
+                .filter(a -> a.getOverallHrScore() != null)
+                .mapToDouble(HRAnswer::getOverallHrScore)
+                .average().orElse(0.0);
+
+        // Weighted overall: Technical 60%, HR 40%
+        double overallScore = (techScore * 0.60) + (hrFinalScore * 0.40);
+
+        // Recommendation thresholds (0-10 scale)
         Recommendation recommendation;
-        if (overallScore >= 85) recommendation = Recommendation.STRONGLY_RECOMMENDED;
-        else if (overallScore >= 70) recommendation = Recommendation.RECOMMENDED;
-        else if (overallScore >= 55) recommendation = Recommendation.BORDERLINE;
-        else recommendation = Recommendation.NOT_RECOMMENDED;
+        if (overallScore >= 8.5)      recommendation = Recommendation.STRONGLY_RECOMMENDED;
+        else if (overallScore >= 7.0) recommendation = Recommendation.RECOMMENDED;
+        else if (overallScore >= 5.5) recommendation = Recommendation.BORDERLINE;
+        else                          recommendation = Recommendation.NOT_RECOMMENDED;
 
-        // Build report
-        String strengths = "[\"Strong core Java fundamentals\",\"Good REST API understanding\",\"Clear communication\"]";
-        String weaknesses = "[\"AWS knowledge needs improvement\",\"Binary Trees\",\"Dynamic Programming\"]";
+        // ─── Technical Breakdown — real per-dimension averages ────────────────
+        double avgAccuracy = techAnswers.stream()
+                .filter(a -> a.getAccuracyScore() != null)
+                .mapToDouble(TechnicalAnswer::getAccuracyScore).average().orElse(techScore);
+        double avgDepth = techAnswers.stream()
+                .filter(a -> a.getDepthScore() != null)
+                .mapToDouble(TechnicalAnswer::getDepthScore).average().orElse(techScore);
+        double avgTechComm = techAnswers.stream()
+                .filter(a -> a.getCommunicationScore() != null)
+                .mapToDouble(TechnicalAnswer::getCommunicationScore).average().orElse(techScore);
+
+        String technicalBreakdown = String.format(
+                "{\"Overall\":%.1f,\"Accuracy\":%.1f,\"Depth\":%.1f,\"Communication\":%.1f}",
+                techScore, avgAccuracy, avgDepth, avgTechComm);
+
+        // ─── HR Breakdown — real 7-dimension averages ─────────────────────────
+        double avgConfidence      = hrAnswers.stream().filter(a -> a.getConfidenceScore() != null)
+                .mapToDouble(HRAnswer::getConfidenceScore).average().orElse(hrFinalScore);
+        double avgHRComm          = hrAnswers.stream().filter(a -> a.getCommunicationScore() != null)
+                .mapToDouble(HRAnswer::getCommunicationScore).average().orElse(hrFinalScore);
+        double avgFluency         = hrAnswers.stream().filter(a -> a.getFluencyScore() != null)
+                .mapToDouble(HRAnswer::getFluencyScore).average().orElse(hrFinalScore);
+        double avgGrammar         = hrAnswers.stream().filter(a -> a.getGrammarScore() != null)
+                .mapToDouble(HRAnswer::getGrammarScore).average().orElse(hrFinalScore);
+        double avgLeadership      = hrAnswers.stream().filter(a -> a.getLeadershipScore() != null)
+                .mapToDouble(HRAnswer::getLeadershipScore).average().orElse(hrFinalScore);
+        double avgPositivity      = hrAnswers.stream().filter(a -> a.getPositivityScore() != null)
+                .mapToDouble(HRAnswer::getPositivityScore).average().orElse(hrFinalScore);
+        double avgProfessionalism = hrAnswers.stream().filter(a -> a.getProfessionalismScore() != null)
+                .mapToDouble(HRAnswer::getProfessionalismScore).average().orElse(hrFinalScore);
+
+        String hrBreakdown = String.format(
+                "{\"Confidence\":%.1f,\"Communication\":%.1f,\"Fluency\":%.1f," +
+                "\"Grammar\":%.1f,\"Leadership\":%.1f,\"Positivity\":%.1f,\"Professionalism\":%.1f}",
+                avgConfidence, avgHRComm, avgFluency, avgGrammar,
+                avgLeadership, avgPositivity, avgProfessionalism);
+
+        // ─── Dynamic Strengths & Weaknesses from real scores ─────────────────
+        java.util.List<String> strengthsList = new java.util.ArrayList<>();
+        java.util.List<String> weaknessesList = new java.util.ArrayList<>();
+
+        if (techScore >= 7.5)       strengthsList.add("Strong technical knowledge and problem-solving ability");
+        else if (techScore >= 5.5)  strengthsList.add("Solid foundational understanding of technical concepts");
+        else                        weaknessesList.add("Technical fundamentals need significant improvement");
+
+        if (avgDepth >= 7.0)        strengthsList.add("Demonstrates depth of understanding in key technical areas");
+        else                        weaknessesList.add("Needs to develop deeper knowledge of advanced topics");
+
+        if (avgTechComm >= 7.0)     strengthsList.add("Explains technical concepts clearly and concisely");
+        else                        weaknessesList.add("Practice explaining technical concepts more clearly");
+
+        if (avgConfidence >= 7.0)   strengthsList.add("Communicates with confidence and professionalism");
+        else                        weaknessesList.add("Build more confidence when presenting responses");
+
+        if (avgHRComm >= 7.0)       strengthsList.add("Excellent verbal communication and articulation skills");
+        else                        weaknessesList.add("Focus on improving verbal clarity and sentence structure");
+
+        if (avgLeadership >= 7.0)   strengthsList.add("Shows initiative, ownership, and leadership qualities");
+        else                        weaknessesList.add("Provide more specific examples of leadership and teamwork");
+
+        if (avgFluency >= 7.0)      strengthsList.add("Speaks fluently with minimal hesitation or filler words");
+        else                        weaknessesList.add("Practice to reduce filler words and speak more fluently");
+
+        if (strengthsList.isEmpty())
+            strengthsList.add("Completed the full interview demonstrating commitment and effort");
+        if (weaknessesList.isEmpty())
+            weaknessesList.add("Continue practicing to maintain this excellent level of performance");
+
+        String strengthsJson = strengthsList.stream()
+                .map(s -> "\"" + s.replace("\"", "'") + "\"")
+                .collect(Collectors.joining(",", "[", "]"));
+        String weaknessesJson = weaknessesList.stream()
+                .map(w -> "\"" + w.replace("\"", "'") + "\"")
+                .collect(Collectors.joining(",", "[", "]"));
+
+        // ─── AI Summary with real counts and scores ───────────────────────────
+        long techAnswered = techAnswers.stream().filter(a -> a.getTranscript() != null).count();
+        long hrAnswered   = hrAnswers.stream().filter(a -> a.getTranscript() != null).count();
         String aiSummary = String.format(
-            "Candidate demonstrates %s overall performance with a score of %.1f/100. %s for this role.",
-            overallScore >= 70 ? "strong" : "moderate",
-            overallScore,
-            recommendation == Recommendation.RECOMMENDED || recommendation == Recommendation.STRONGLY_RECOMMENDED
-                ? "Recommended" : "Not recommended"
-        );
+            "Candidate answered %d technical questions (avg %.1f/10) and %d HR questions (avg %.1f/10), " +
+            "achieving an overall score of %.1f/10. %s for this role based on demonstrated %s performance.",
+            techAnswered, techScore, hrAnswered, hrFinalScore, overallScore,
+            (recommendation == Recommendation.RECOMMENDED || recommendation == Recommendation.STRONGLY_RECOMMENDED)
+                ? "Recommended" : "Not recommended at this time",
+            overallScore >= 7.0 ? "strong" : overallScore >= 5.5 ? "satisfactory" : "developing");
+
         String pdfUrl = "https://techwings-reports.s3.amazonaws.com/" + sessionId + "/report.pdf";
 
-        InterviewReport report = InterviewReport.builder()
-                .session(session)
-                .user(session.getUser())
-                .technicalScore(techScore)
-                .codingScore(codingScore)
-                .hrScore(hrFinalScore)
-                .overallScore(overallScore)
-                .recommendation(recommendation)
-                .strengths(strengths)
-                .weaknesses(weaknesses)
-                .technicalBreakdown("{\"Java\":9,\"Spring Boot\":8,\"Database\":7,\"REST APIs\":9}")
-                .hrBreakdown("{\"Communication\":9,\"Confidence\":8,\"Leadership\":7}")
-                .aiSummary(aiSummary)
-                .pdfS3Url(pdfUrl)
-                .build();
+        // ─── Save Report (upsert to handle retries safely) ───────────────────
+        InterviewReport report = reportRepository.findBySessionId(sessionId)
+                .orElse(InterviewReport.builder().session(session).user(session.getUser()).build());
+        report.setTechnicalScore(techScore);
+        report.setHrScore(hrFinalScore);
+        report.setOverallScore(overallScore);
+        report.setRecommendation(recommendation);
+        report.setStrengths(strengthsJson);
+        report.setWeaknesses(weaknessesJson);
+        report.setTechnicalBreakdown(technicalBreakdown);
+        report.setHrBreakdown(hrBreakdown);
+        report.setAiSummary(aiSummary);
+        report.setPdfS3Url(pdfUrl);
         reportRepository.save(report);
 
-        // Generate roadmap
-        String roadmapJson = "{\"priority_topics\":[\"Redis\",\"Docker\",\"Graphs\",\"Dynamic Programming\"]," +
-                "\"weeks\":[{\"week\":1,\"focus\":\"Dynamic Programming\",\"topics\":[\"Memoization\",\"Tabulation\"]}," +
-                "{\"week\":2,\"focus\":\"System Design Basics\",\"topics\":[\"Redis\",\"Caching\"]}]," +
-                "\"estimated_duration_weeks\":8}";
-        LearningRoadmap roadmap = LearningRoadmap.builder()
-                .session(session)
-                .user(session.getUser())
-                .roadmapJson(roadmapJson)
-                .build();
+        // ─── Learning Roadmap based on weakest areas ──────────────────────────
+        java.util.List<String> priorityTopics = new java.util.ArrayList<>();
+        if (avgDepth < 7.0)           priorityTopics.add("System Design & Architecture");
+        if (avgAccuracy < 7.0)        priorityTopics.add("Core " + session.getTrack().getName() + " Concepts");
+        if (avgFluency < 6.5)         priorityTopics.add("Verbal Communication & Fluency");
+        if (avgLeadership < 6.5)      priorityTopics.add("Leadership & Teamwork Stories");
+        if (priorityTopics.isEmpty()) priorityTopics.add("Advanced " + session.getTrack().getName() + " Topics");
+
+        String priorityJson = priorityTopics.stream()
+                .map(t -> "\"" + t + "\"")
+                .collect(Collectors.joining(",", "[", "]"));
+        String roadmapJson = String.format(
+            "{\"priority_topics\":%s," +
+            "\"weeks\":[{\"week\":1,\"focus\":\"%s\",\"topics\":[\"Study key concepts\",\"Practice examples\"]}," +
+            "{\"week\":2,\"focus\":\"Mock Interviews\",\"topics\":[\"Technical mock\",\"HR mock\",\"Time management\"]}]," +
+            "\"estimated_duration_weeks\":4}",
+            priorityJson, priorityTopics.get(0));
+
+        LearningRoadmap roadmap = roadmapRepository.findBySessionId(sessionId)
+                .orElse(LearningRoadmap.builder().session(session).user(session.getUser()).build());
+        roadmap.setRoadmapJson(roadmapJson);
         roadmapRepository.save(roadmap);
 
+        // ─── Finalize Session ─────────────────────────────────────────────────
         session.setOverallScore(overallScore);
         session.setRecommendation(recommendation);
         session.setStatus(SessionStatus.COMPLETED);
         sessionRepository.save(session);
 
-        // Send notification email
         notificationService.sendReportReadyEmail(session.getUser().getId(), sessionId);
-        log.info("Report generated for session: {} overallScore: {}", sessionId, overallScore);
+        log.info("Report generated: session={} techScore={} hrScore={} overall={} recommendation={}",
+                sessionId, techScore, hrFinalScore, overallScore, recommendation);
     }
 
     @Override
@@ -138,12 +233,10 @@ public class ReportServiceImpl implements ReportService {
                 .email(r.getUser().getEmail())
                 .track(r.getSession().getTrack().getName())
                 .technicalScore(r.getTechnicalScore())
-                .codingScore(r.getCodingScore())
                 .hrScore(r.getHrScore())
                 .overallScore(r.getOverallScore())
                 .recommendation(r.getRecommendation() != null ? r.getRecommendation().name() : null)
                 .technicalBreakdown(r.getTechnicalBreakdown())
-                .codingBreakdown(r.getCodingBreakdown())
                 .hrBreakdown(r.getHrBreakdown())
                 .strengths(r.getStrengths())
                 .weaknesses(r.getWeaknesses())

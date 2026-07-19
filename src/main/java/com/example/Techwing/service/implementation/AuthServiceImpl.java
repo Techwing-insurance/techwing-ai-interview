@@ -71,10 +71,16 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Email is not registered. Please create an account first."));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new org.springframework.security.authentication.BadCredentialsException("Incorrect password");
+        }
+
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("User", "email", request.getEmail()));
+                
         log.info("User logged in: {}", user.getEmail());
         return buildAuthResponse(user);
     }
