@@ -35,5 +35,10 @@ env/
 *.env
 python-ai/.env
 
+# SSL/TLS Keystores — NEVER commit these
+*.p12
+*.jks
+*.keystore
+
 # Shortcuts
 *.lnk
