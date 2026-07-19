@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, Mail, Lock, Loader2, Eye, EyeOff, Hash, BookOpen, GraduationCap } from 'lucide-react';
-import axios from 'axios';
+import api from '../services/api';
 
 const RegisterPage = () => {
     const [formData, setFormData] = useState({ 
@@ -20,6 +20,7 @@ const RegisterPage = () => {
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [tracks, setTracks] = useState([]);
+    const [tracksError, setTracksError] = useState('');
     
     const { register } = useAuth();
     const navigate = useNavigate();
@@ -27,15 +28,17 @@ const RegisterPage = () => {
     useEffect(() => {
         const fetchTracks = async () => {
             try {
-                // Fetch tracks from public API via Vite proxy
-                const res = await axios.get('/api/public/tracks');
+                const res = await api.get('/public/tracks');
                 if (res.data.success && res.data.data.length > 0) {
                     setTracks(res.data.data);
                     // Default select the first track
                     setFormData(prev => ({ ...prev, trackId: res.data.data[0].id }));
+                } else {
+                    setTracksError('No technology tracks found. Please contact admin.');
                 }
             } catch (err) {
                 console.error("Failed to load tracks", err);
+                setTracksError('Failed to load technology tracks. Please refresh the page.');
             }
         };
         fetchTracks();
@@ -194,7 +197,9 @@ const RegisterPage = () => {
                         </div>
                     </div>
 
-                    <button type="submit" disabled={loading} className="btn-primary w-full flex justify-center mt-6">
+                    {tracksError && <div className="bg-yellow-500/10 border border-yellow-500/50 text-yellow-400 p-3 rounded-lg text-sm">{tracksError}</div>}
+
+                    <button type="submit" disabled={loading || !formData.trackId} className="btn-primary w-full flex justify-center mt-6">
                         {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Register'}
                     </button>
                 </form>
