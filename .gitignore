@@ -20,3 +20,20 @@ target/
 # OS
 .DS_Store
 Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Secrets — NEVER commit these
+.env
+*.env
+python-ai/.env
+
+# Shortcuts
+*.lnk

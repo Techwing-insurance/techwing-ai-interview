@@ -49,6 +49,27 @@ public class VoiceController {
     }
 
     /**
+     * POST /api/voice/speak
+     * JSON body: { "text": "...", "voice": "female" }
+     * Proxy endpoint for React frontend TTS — works in production on mobile.
+     * Returns audio/mpeg directly.
+     */
+    @PostMapping("/speak")
+    public ResponseEntity<byte[]> speak(@RequestBody java.util.Map<String, String> body) {
+        String text = body.getOrDefault("text", "");
+        String voice = body.getOrDefault("voice", "female");
+        if (text.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        byte[] audio = aiClientService.generateSpeech(text, voice);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, "audio/mpeg")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .header("Cache-Control", "no-cache")
+                .body(audio);
+    }
+
+    /**
      * GET /api/voice/ai-health
      * Checks if Python AI service is reachable.
      */

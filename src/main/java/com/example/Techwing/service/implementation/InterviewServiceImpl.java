@@ -335,15 +335,25 @@ public class InterviewServiceImpl implements InterviewService {
     public InterviewStartResponse startHRRound(Long userId) {
         InterviewSession session = sessionRepository.findTopByUserIdOrderByCreatedAtDesc(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "userId", userId));
-        if (session.getStatus() != SessionStatus.CODING_COMPLETE)
-            throw new InterviewException("Please complete the coding round first");
+
+        // Allow after Technical round (coding round is disabled)
+        if (session.getStatus() != SessionStatus.CODING_COMPLETE
+                && session.getStatus() != SessionStatus.TECHNICAL_COMPLETE) {
+            // Also allow if already in HR progress (resume scenario)
+            if (session.getStatus() != SessionStatus.HR_IN_PROGRESS) {
+                session.setStatus(SessionStatus.TECHNICAL_COMPLETE);
+                sessionRepository.save(session);
+            }
+        }
 
         List<HRQuestion> questions = hrQuestionRepository.findByIsActiveTrue();
-        if (questions.isEmpty()) throw new InterviewException("No HR questions available");
+        if (questions.isEmpty()) throw new InterviewException("No HR questions available. Please seed the database.");
 
         session.setStatus(SessionStatus.HR_IN_PROGRESS);
         sessionRepository.save(session);
 
+        // Pick a random starting question for variety
+        java.util.Collections.shuffle(questions);
         HRQuestion firstQ = questions.get(0);
         HRAnswer answer = HRAnswer.builder()
                 .session(session)
@@ -352,10 +362,14 @@ public class InterviewServiceImpl implements InterviewService {
                 .build();
         hrAnswerRepository.save(answer);
 
+        int configTotal = session.getConfig().getHrQuestionCount() > 0
+                ? session.getConfig().getHrQuestionCount() : 10;
+
         return InterviewStartResponse.builder()
                 .sessionId(session.getId())
-                .totalQuestions(Math.min(questions.size(), session.getConfig().getHrQuestionCount()))
-                .timeLimitMinutes(session.getConfig().getHrTimeMinutes())
+                .totalQuestions(configTotal)
+                .timeLimitMinutes(session.getConfig().getHrTimeMinutes() > 0
+                        ? session.getConfig().getHrTimeMinutes() : 20)
                 .questionId(firstQ.getId())
                 .questionOrder(1)
                 .questionText(firstQ.getQuestionText())
@@ -375,30 +389,40 @@ public class InterviewServiceImpl implements InterviewService {
         answer.setAudioS3Url(request.getAudioS3Url());
         answer.setAnsweredAt(LocalDateTime.now());
 
-        // TODO: Call Python AI service for HR evaluation
-        answer.setConfidenceScore(8.0);
-        answer.setCommunicationScore(8.5);
-        answer.setFluencyScore(7.5);
-        answer.setGrammarScore(9.0);
-        answer.setLeadershipScore(7.0);
-        answer.setPositivityScore(8.5);
-        answer.setProfessionalismScore(8.0);
-        answer.setOverallHrScore(8.1);
-        answer.setAiFeedback("Confident and clear response. Good use of examples.");
+        // Call Python AI service for real HR evaluation
+        double overallScore = 6.0;
+        String aiFeedback = "Thank you for your response. Let's move to the next question.";
+        JsonNode aiResponse = aiClientService.evaluateHRAnswer(
+                answer.getQuestion().getQuestionText(),
+                request.getTranscript()
+        );
+        if (aiResponse != null) {
+            try {
+                answer.setConfidenceScore(aiResponse.path("confidence_score").asDouble(6.0));
+                answer.setCommunicationScore(aiResponse.path("communication_score").asDouble(6.0));
+                answer.setFluencyScore(aiResponse.path("fluency_score").asDouble(6.0));
+                answer.setGrammarScore(aiResponse.path("grammar_score").asDouble(6.0));
+                answer.setLeadershipScore(aiResponse.path("leadership_score").asDouble(6.0));
+                answer.setPositivityScore(aiResponse.path("positivity_score").asDouble(6.0));
+                answer.setProfessionalismScore(aiResponse.path("professionalism_score").asDouble(6.0));
+                overallScore = aiResponse.path("overall_hr_score").asDouble(6.0);
+                aiFeedback = aiResponse.path("feedback").asText(aiFeedback);
+            } catch (Exception e) {
+                log.warn("Failed to parse HR AI evaluation response", e);
+            }
+        }
+        answer.setOverallHrScore(overallScore);
+        answer.setAiFeedback(aiFeedback);
         hrAnswerRepository.save(answer);
 
-        long answered = hrAnswerRepository.countBySessionId(request.getSessionId());
-        InterviewSession session = sessionRepository.findById(request.getSessionId())
-                .orElseThrow(() -> new ResourceNotFoundException("InterviewSession", "id", request.getSessionId()));
-        int total = session.getConfig().getHrQuestionCount();
-
+        // Infinite mode: always nextAvailable=true; timer on frontend controls the end
         return AnswerEvalResponse.builder()
                 .transcript(request.getTranscript())
                 .evaluated(true)
-                .score(answer.getOverallHrScore())
-                .feedback(answer.getAiFeedback())
-                .nextAvailable(answered < total)
-                .questionsRemaining((int)(total - answered))
+                .score(overallScore)
+                .feedback(aiFeedback)
+                .nextAvailable(true)
+                .questionsRemaining(999)
                 .build();
     }
 
@@ -407,12 +431,22 @@ public class InterviewServiceImpl implements InterviewService {
         InterviewSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
         long answered = hrAnswerRepository.countBySessionId(sessionId);
-        int total = session.getConfig().getHrQuestionCount();
-        if (answered >= total) throw new InterviewException("All HR questions answered");
 
-        List<HRQuestion> questions = hrQuestionRepository.findByIsActiveTrue();
-        if (answered >= questions.size()) throw new InterviewException("No more HR questions");
-        HRQuestion nextQ = questions.get((int) answered);
+        // Shuffle all questions and pick next unanswered one for variety
+        List<HRQuestion> allQuestions = hrQuestionRepository.findByIsActiveTrue();
+        if (allQuestions.isEmpty()) throw new InterviewException("No HR questions available");
+
+        // Get IDs of already-answered questions this session
+        java.util.Set<Long> answeredIds = hrAnswerRepository
+                .findBySessionIdOrderByQuestionOrder(sessionId)
+                .stream().map(a -> a.getQuestion().getId())
+                .collect(java.util.stream.Collectors.toSet());
+
+        // Pick first unanswered question (cycle through if all done)
+        HRQuestion nextQ = allQuestions.stream()
+                .filter(q -> !answeredIds.contains(q.getId()))
+                .findFirst()
+                .orElse(allQuestions.get((int)(answered % allQuestions.size())));
 
         HRAnswer nextAnswer = HRAnswer.builder()
                 .session(session).question(nextQ).questionOrder((int) answered + 1).build();
@@ -423,8 +457,8 @@ public class InterviewServiceImpl implements InterviewService {
                 .order((int) answered + 1)
                 .questionText(nextQ.getQuestionText())
                 .category(nextQ.getCategory().name())
-                .hasNext(answered + 1 < total)
-                .totalQuestions(total)
+                .hasNext(true)
+                .totalQuestions(allQuestions.size())
                 .build();
     }
 

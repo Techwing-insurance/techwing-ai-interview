@@ -53,14 +53,13 @@ const TechnicalRoundPage = () => {
             if (evalData.nextAvailable) {
                 if (currentSessionData?.sessionId) fetchNextQuestion(currentSessionData.sessionId);
             } else {
-                // PHASE 4: SKIP CODING ROUND
-                alert("Technical Round Complete! Moving to HR Round...");
-                navigate('/interview/hr');
+                setFeedback('Technical Round Complete! Moving to HR Round...');
+                setTimeout(() => navigate('/interview/hr'), 2500);
             }
 
         } catch (err) {
             console.error('Error submitting answer', err);
-            alert('Error processing your answer. Please ensure backend services are running.');
+            setFeedback('Error processing your answer. Please try again.');
         } finally {
             setIsProcessing(false);
         }
@@ -159,10 +158,11 @@ const TechnicalRoundPage = () => {
     };
 
     const speak = (text) => {
-        return new Promise(async (resolve, reject) => {
+        return new Promise(async (resolve) => {
             setIsSpeaking(true);
             try {
-                const response = await fetch('http://localhost:8000/ai/tts/speak', {
+                // Use Spring Boot proxy — works in production on mobile
+                const response = await fetch('/api/voice/speak', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text, voice: 'female' })
@@ -185,14 +185,14 @@ const TechnicalRoundPage = () => {
                 audio.onerror = (e) => {
                     console.error('Audio playback error', e);
                     setIsSpeaking(false);
-                    resolve(); // Resolve anyway to continue flow
+                    resolve();
                 };
                 
                 await audio.play();
             } catch (err) {
                 console.error('TTS error', err);
                 setIsSpeaking(false);
-                resolve(); // Resolve to prevent hanging
+                resolve();
             }
         });
     };
