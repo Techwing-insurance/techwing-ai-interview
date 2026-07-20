@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        TOMCAT_URL  = 'http://localhost:8080'
+        TOMCAT_URL  = 'http://localhost:8081'
         NGINX_ROOT  = '/var/www/techwing'
     }
 
