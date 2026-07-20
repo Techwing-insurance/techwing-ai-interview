@@ -7,16 +7,16 @@ import { useBrowserSTT, BROWSER_STT_SUPPORTED } from '../hooks/useBrowserSTT';
 import { useVAD } from '../hooks/useVAD';
 import * as interviewService from '../services/interviewService';
 import { useInterview } from '../context/InterviewContext';
-import { Clock, Loader2, Mic, Users } from 'lucide-react';
 import Swal from 'sweetalert2';
+import logo from '../assets/logo.png';
 
 // ─── Status Display Messages ──────────────────────────────────────────────────
 const STATUS = {
     IDLE: 'Click "Start HR Round" to begin',
     INITIALIZING: 'Connecting to your HR interviewer...',
-    AI_SPEAKING: 'Priya is speaking...',
+    AI_SPEAKING: 'AI is speaking...',
     LISTENING: 'Listening... speak your answer',
-    PROCESSING: 'Priya is thinking...',
+    PROCESSING: 'AI is thinking...',
     TIME_UP: 'HR round complete!',
 };
 
@@ -342,10 +342,10 @@ const HrRoundPage = () => {
 
                     <h2 className="text-2xl font-bold text-white mb-3">HR Round</h2>
                     <p className="text-gray-400 mb-2 text-sm">
-                        HR Interviewer: <span className="text-orange-400 font-semibold">Priya</span>
+                        HR Interviewer: <span className="text-orange-400 font-semibold">AI Assistant</span>
                     </p>
                     <p className="text-gray-400 mb-8 text-sm leading-relaxed">
-                        This is a <strong className="text-white">voice conversation</strong> with Priya, your HR
+                        This is a <strong className="text-white">voice conversation</strong> with your HR
                         interviewer. Answer naturally and confidently — just as you would in a real HR interview.
                     </p>
 
@@ -401,13 +401,11 @@ const HrRoundPage = () => {
             {/* Header */}
             <header className="flex-shrink-0 px-6 py-4 border-b border-white/10 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-orange-500/20 rounded-xl flex items-center justify-center border border-orange-500/30">
-                        <Users className="w-4 h-4 text-orange-400" />
-                    </div>
+                    <img src={logo} alt="Techwing Logo" className="h-9 w-auto object-contain" />
                     <div>
                         <h1 className="text-base font-bold text-white leading-tight">HR Round</h1>
                         <p className="text-xs text-gray-500">
-                            Question {questionNumber} &bull; Priya (HR Interviewer)
+                            Question {questionNumber} &bull; HR Interviewer
                         </p>
                     </div>
                 </div>
@@ -458,16 +456,7 @@ const HrRoundPage = () => {
                     </div>
                 </div>
 
-                {/* Mic hint */}
-                {!isRecording && !isSpeaking && !isProcessing && (
-                    <button
-                        onClick={startListening}
-                        className="flex items-center gap-2 text-sm text-gray-500 hover:text-orange-400 transition-colors mt-2"
-                    >
-                        <Mic className="w-4 h-4" />
-                        Click to speak your answer
-                    </button>
-                )}
+                {/* Mic hint removed for automated flow */}
             </main>
 
             {/* Footer */}
