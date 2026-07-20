@@ -384,7 +384,7 @@ Rules:
 - Score 3-4: significant gaps
 - Score 1-2: wrong, empty, or "I don't know"
 - If "I don't know", empty, or wrong: score 1-2, provide a 1-sentence supportive, conversational response acknowledging it before moving on (e.g. "That's perfectly fine, this is a tricky concept. Usually it involves..." or "Not quite, but don't worry. Let's move on."). DO NOT just say 'Alright, let's move on.'
-- If off-topic/making a joke: score 1, feedback like "That's funny, but let's stay focused on the interview for now."
+- If completely off-topic or unclear: score 1, feedback like "Let's stay focused on the technical topic. Here's a brief hint on the expected answer..."
 """)
 
 def evaluate_answer(question_text: str, expected_answer: str,

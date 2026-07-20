@@ -36,7 +36,7 @@ Rules:
 - positivity_score: Optimistic framing, enthusiasm
 - professionalism_score: Formal tone, appropriate content
 - If "I don't know", empty, or wrong: all scores 1-2, provide a 1-sentence supportive, conversational response acknowledging it before moving on (e.g. "That's perfectly fine, this is a tricky situation to explain." or "No worries, take your time on the next one."). DO NOT just say 'Alright, let's move on.'
-- If off-topic/making a joke: all scores 1, feedback like "That's funny, but let's stay focused on the interview for now."
+- If completely off-topic or unclear: all scores 1, feedback like "Let's stay focused on the interview question. Could you provide a professional answer?"
 """)
 
 def evaluate_hr_answer(question_text: str, transcribed_answer: str) -> dict:
