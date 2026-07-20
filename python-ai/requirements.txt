@@ -15,3 +15,4 @@ pdfminer.six
 pytesseract
 Pillow
 edge-tts
+langchain-nvidia-ai-endpoints
