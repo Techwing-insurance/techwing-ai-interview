@@ -8,26 +8,36 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 RESUME_PROMPT = ChatPromptTemplate.from_template("""
-You are an expert resume parser. Analyze the following resume text and extract structured information.
+You are an elite, highly detailed resume parser. Your job is to extract EVERYTHING from the provided resume text.
+Do NOT summarize. Do NOT omit any details. Do NOT use placeholders.
 
 Resume Text:
 {resume_text}
 
 Return a valid JSON object with exactly this structure:
 {{
-  "skills": ["skill1", "skill2", ...],
+  "skills": ["List EVERY SINGLE skill found in the resume, exhaustively"],
   "projects": [
-    {{"name": "...", "description": "...", "tech_stack": ["...", "..."]}}
+    {{
+      "name": "Full Project Name", 
+      "description": "The COMPLETE, highly detailed description of the project exactly as described in the resume, including all bullet points and responsibilities. Do NOT summarize into a few words.", 
+      "tech_stack": ["Every", "single", "technology", "used", "in", "this", "project"]
+    }}
   ],
   "education": [
-    {{"degree": "...", "institution": "...", "year": 2025}}
+    {{"degree": "Full Degree Name", "institution": "Full Institution Name", "year": 2025}}
   ],
-  "certifications": ["cert1", "cert2"],
+  "certifications": ["List every single certification found, exhaustively"],
   "experience_years": 0.5,
-  "summary": "Brief 2-3 sentence professional summary of the candidate"
+  "summary": "A highly detailed, comprehensive professional summary of the candidate's entire profile based on the resume (at least 3-4 sentences)."
 }}
 
-Return ONLY the JSON, no markdown, no explanation.
+CRITICAL INSTRUCTIONS:
+1. EXTRACT EXHAUSTIVELY: Do not leave out any skills, projects, or certifications.
+2. FULL DESCRIPTIONS: For the project descriptions, copy the full detail and context from the resume. Do not compress them into a few words.
+3. NO PLACEHOLDERS: Output only the actual data extracted from the resume text. 
+
+Return ONLY valid JSON, no markdown formatting (like ```json) and no explanation.
 """)
 
 def analyze_resume(resume_text: str) -> dict:
