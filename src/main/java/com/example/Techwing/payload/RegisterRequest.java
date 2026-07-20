@@ -23,9 +23,6 @@ public class RegisterRequest {
     
     @NotNull(message = "Year is required")
     private Integer year;
-    
-    private String phone;
-    private String college;
 
     @NotNull(message = "Track ID is required")
     private Long trackId;

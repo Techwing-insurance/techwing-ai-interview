@@ -3,7 +3,7 @@ Resume Agent — extracts skills, projects, experience from PDF text using LLM.
 """
 import json
 import re
-from config import get_llm
+from config import get_resume_llm
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
@@ -39,11 +39,22 @@ CRITICAL INSTRUCTIONS:
 
 Return ONLY valid JSON, no markdown formatting (like ```json) and no explanation.
 """)
-
 def analyze_resume(resume_text: str) -> dict:
-    llm = get_llm()
+    llm = get_resume_llm()
     chain = RESUME_PROMPT | llm | StrOutputParser()
     raw = chain.invoke({"resume_text": resume_text})
+    
     # Clean markdown code blocks if present
     raw = re.sub(r"```json|```", "", raw).strip()
-    return json.loads(raw)
+    
+    # Robustly extract JSON block in case the LLM added conversational text
+    match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if match:
+        raw = match.group(0)
+        
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse resume JSON: {e}")
+        print(f"Raw LLM Output:\\n{raw}")
+        raise ValueError("AI returned invalid JSON structure for resume.")

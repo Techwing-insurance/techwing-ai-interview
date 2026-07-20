@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import * as interviewService from '../services/interviewService';
-import { Upload, Play, CheckCircle, FileText, Code, Users } from 'lucide-react';
+import { Upload, Play, CheckCircle, FileText, Code, Users, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 const DashboardPage = () => {
@@ -10,9 +10,25 @@ const DashboardPage = () => {
     const navigate = useNavigate();
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState('');
     const [resumeUploaded, setResumeUploaded] = useState(() => {
         return localStorage.getItem('resumeUploaded') === 'true';
     });
+
+    useEffect(() => {
+        const checkStatus = async () => {
+            try {
+                const res = await interviewService.getResumeStatus();
+                if (res.data.data === 'ANALYZED') {
+                    setResumeUploaded(true);
+                    localStorage.setItem('resumeUploaded', 'true');
+                }
+            } catch (error) {
+                // Ignore if no resume exists yet
+            }
+        };
+        checkStatus();
+    }, []);
 
     const handleFileChange = async (e) => {
         if (e.target.files && e.target.files[0]) {
@@ -24,14 +40,45 @@ const DashboardPage = () => {
 
     const uploadSelectedFile = async (fileToUpload) => {
         setUploading(true);
+        setUploadError('');
         const formData = new FormData();
         formData.append('file', fileToUpload);
         try {
             await interviewService.uploadResume(formData);
-            setResumeUploaded(true);
-            localStorage.setItem('resumeUploaded', 'true');
+            
+            // Poll for status until ANALYZED or FAILED
+            const pollInterval = setInterval(async () => {
+                try {
+                    const statusRes = await interviewService.getResumeStatus();
+                    if (statusRes.data.data === 'ANALYZED') {
+                        clearInterval(pollInterval);
+                        setResumeUploaded(true);
+                        localStorage.setItem('resumeUploaded', 'true');
+                        setUploading(false);
+                    } else if (statusRes.data.data === 'FAILED') {
+                        clearInterval(pollInterval);
+                        setUploading(false);
+                        setUploadError('AI could not parse this PDF. Please try a different format.');
+                        setFile(null);
+                        Swal.fire({
+                            title: 'Analysis Failed',
+                            text: 'The AI could not read your PDF. Please try a simpler resume format without images.',
+                            icon: 'error',
+                            background: '#1a1f2b',
+                            color: '#fff',
+                            confirmButtonColor: '#CAA928'
+                        });
+                    }
+                } catch (e) {
+                    clearInterval(pollInterval);
+                    setUploading(false);
+                    setUploadError('Connection error while checking status.');
+                }
+            }, 2000);
+
         } catch (error) {
             console.error('Upload failed', error);
+            setUploadError('Upload failed. Please ensure the backend server is running.');
             Swal.fire({
                 title: 'Upload Failed',
                 text: 'Resume upload failed. Please ensure the backend server is running.',
@@ -41,7 +88,6 @@ const DashboardPage = () => {
                 confirmButtonColor: '#CAA928'
             });
             setFile(null); // Reset on failure
-        } finally {
             setUploading(false);
         }
     };
@@ -111,12 +157,22 @@ const DashboardPage = () => {
                                         disabled={uploading}
                                     />
                                     <label htmlFor="resume" className={`cursor-pointer flex flex-col items-center ${uploading ? 'opacity-50 cursor-wait' : ''}`}>
-                                        <Upload className="w-8 h-8 text-techwing-gold mb-2" />
+                                        {uploading ? (
+                                            <Loader2 className="w-8 h-8 text-techwing-gold mb-2 animate-spin" />
+                                        ) : (
+                                            <Upload className="w-8 h-8 text-techwing-gold mb-2" />
+                                        )}
                                         <span className="text-sm font-medium">
-                                            {uploading ? 'Uploading & Analyzing...' : (file ? file.name : 'Select PDF File (Auto Upload)')}
+                                            {uploading ? 'Analyzing Resume...' : (file ? file.name : 'Select PDF File (Auto Upload)')}
                                         </span>
                                     </label>
                                 </div>
+                                {uploadError && (
+                                    <div className="bg-red-500/10 border border-red-500/50 p-3 rounded-lg text-center">
+                                        <p className="text-red-400 text-sm font-bold">Failed to Analyze Resume</p>
+                                        <p className="text-red-300 text-xs mt-1">{uploadError}</p>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="space-y-3">

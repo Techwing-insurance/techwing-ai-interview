@@ -12,15 +12,17 @@
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-// Preferred voice names in order of preference (matches Microsoft Neural voices on Chrome/Windows)
+// Preferred voice names in order of preference (prioritize highly realistic Google voices)
 const PREFERRED_VOICES = [
+    'Google US English',
+    'Google UK English Female',
+    'Google UK English Male',
     'Microsoft Aria Online (Natural) - English (United States)',
     'Microsoft Aria - English (United States)',
     'Microsoft Jenny Online (Natural) - English (United States)',
     'Microsoft Jenny - English (United States)',
-    'Microsoft Zira - English (United States)',
-    'Google US English',
-    'Samantha',  // macOS
+    'Samantha',  // macOS premium
+    'Microsoft Zira - English (United States)', // Fallback
 ];
 
 /**

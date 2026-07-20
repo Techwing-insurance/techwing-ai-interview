@@ -9,6 +9,7 @@ import * as interviewService from '../services/interviewService';
 import { useInterview } from '../context/InterviewContext';
 import { Clock, Loader2, Mic, MicOff } from 'lucide-react';
 import Swal from 'sweetalert2';
+import logo from '../assets/logo.png';
 
 // ─── Status Display Messages ──────────────────────────────────────────────────
 const STATUS = {
@@ -240,7 +241,7 @@ const TechnicalRoundPage = () => {
             // Speak welcome + first question
             setStatus(STATUS.AI_SPEAKING);
             await speak(
-                `Hello! Welcome to the Technical Round. I'm Alex, your interviewer today. ` +
+                `Hello! Welcome to the Technical Round. I'm your interviewer today. ` +
                 `We'll go through some technical questions. Please speak your answers clearly. ` +
                 `Here's your first question: ${data.questionText}`
             );
@@ -398,13 +399,11 @@ const TechnicalRoundPage = () => {
             {/* Header */}
             <header className="flex-shrink-0 px-6 py-4 border-b border-white/10 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-techwing-gold/20 rounded-xl flex items-center justify-center border border-techwing-gold/30">
-                        <span className="text-techwing-gold font-bold text-sm">TW</span>
-                    </div>
+                    <img src={logo} alt="Techwing Logo" className="h-9 w-auto object-contain" />
                     <div>
                         <h1 className="text-base font-bold text-white leading-tight">Technical Round</h1>
                         <p className="text-xs text-gray-500">
-                            Question {questionNumber} &bull; Alex (AI Interviewer)
+                            Question {questionNumber}
                         </p>
                     </div>
                 </div>
@@ -450,24 +449,15 @@ const TechnicalRoundPage = () => {
                     </div>
                 </div>
 
-                {/* Mic hint */}
-                {!isRecording && !isSpeaking && !isProcessing && (
-                    <button
-                        onClick={startListening}
-                        className="flex items-center gap-2 text-sm text-gray-500 hover:text-techwing-gold transition-colors mt-2"
-                    >
-                        <Mic className="w-4 h-4" />
-                        Click to speak your answer
-                    </button>
-                )}
+                {/* Removed manual mic hint as per fully automated flow requirements */}
             </main>
 
             {/* Bottom instruction bar */}
             <footer className="flex-shrink-0 px-6 py-3 border-t border-white/5 text-center">
                 <p className="text-xs text-gray-600">
                     {BROWSER_STT_SUPPORTED
-                        ? 'Real-time voice recognition active — stop speaking and Alex will respond'
-                        : 'Speak your answer and pause — Alex will respond after 1.4 seconds of silence'}
+                        ? 'Real-time voice recognition active — stop speaking and the AI will respond'
+                        : 'Speak your answer and pause — the AI will respond after 1.4 seconds of silence'}
                 </p>
             </footer>
         </div>

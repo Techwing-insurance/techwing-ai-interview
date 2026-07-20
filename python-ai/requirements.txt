@@ -3,7 +3,6 @@ uvicorn
 langchain
 langchain-openai
 langchain-google-genai
-langchain-groq
 langgraph
 openai
 python-multipart

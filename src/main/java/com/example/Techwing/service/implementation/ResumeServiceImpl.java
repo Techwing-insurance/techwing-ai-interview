@@ -56,6 +56,9 @@ public class ResumeServiceImpl implements ResumeService {
         if (resumeRepository.existsByUserId(userId)) {
             resume = resumeRepository.findByUserId(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("Resume", "userId", userId));
+            // Wipe out old analysis so we don't accidentally reuse mock data if the new analysis fails!
+            resumeAnalysisRepository.findByResumeId(resume.getId())
+                .ifPresent(analysis -> resumeAnalysisRepository.delete(analysis));
         } else {
             resume = Resume.builder().user(user).build();
         }
@@ -103,30 +106,10 @@ public class ResumeServiceImpl implements ResumeService {
                 experienceYears= aiResult.has("experience_years") ? aiResult.get("experience_years").asDouble(0.0) : 0.0;
                 summary        = aiResult.has("summary")        ? aiResult.get("summary").asText("") : "";
 
-                // Dynamically update the user's college from the parsed education
-                if (aiResult.has("education")) {
-                    JsonNode eduNode = aiResult.get("education");
-                    if (eduNode.isArray() && eduNode.size() > 0) {
-                        JsonNode firstEdu = eduNode.get(0);
-                        if (firstEdu.has("institution")) {
-                            String institution = firstEdu.get("institution").asText();
-                            if (institution != null && !institution.trim().isEmpty()) {
-                                User u = resume.getUser();
-                                u.setCollege(institution.trim());
-                                userRepository.save(u);
-                            }
-                        }
-                    }
-                }
             } else {
-                // Fallback when AI service is offline
-                log.warn("AI service returned null, using fallback for resumeId: {}", resumeId);
-                skills         = "[\"Java\",\"Spring Boot\",\"MySQL\",\"React\"]";
-                projects       = "[{\"name\":\"AI Interview Platform\",\"description\":\"Final Year Project\",\"tech_stack\":[\"Java\",\"React\"]}]";
-                education      = "[{\"degree\":\"B.Tech CSE\",\"institution\":\"TechWing University\",\"year\":2025}]";
-                certifications = "[]";
-                experienceYears= 0.5;
-                summary        = "Final year CSE student with Java and Spring Boot background.";
+                // Fail gracefully instead of injecting mock data
+                log.error("AI service returned null. Python backend failed to analyze the resume.");
+                throw new RuntimeException("AI service failed to analyze resume and return valid data.");
             }
 
             ResumeAnalysis analysis = resumeAnalysisRepository.findByResumeId(resume.getId())

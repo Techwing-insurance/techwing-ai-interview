@@ -12,8 +12,6 @@ const RegisterPage = () => {
         pinNumber: '',
         year: 1,
         branch: 'Computer Science', 
-        phone: '0000000000', 
-        college: 'TechWing University', 
         trackId: '' 
     });
     const [loading, setLoading] = useState(false);

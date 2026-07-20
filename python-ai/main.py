@@ -2,6 +2,10 @@
 TechWings AI Service — FastAPI Application
 Port: 8000
 """
+import os
+# Increase the default thread pool for sync endpoints doing blocking I/O
+os.environ["ANYIO_MAX_THREADS"] = "500"
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import resume_router, technical_router, hr_router, report_router, tts_router

@@ -1,8 +1,10 @@
-﻿import api from './api';
+import api from './api';
 
 export const uploadResume = (formData) => api.post('/resume/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
 });
+
+export const getResumeStatus = () => api.get('/resume/status');
 
 // Voice / AI Services
 export const transcribeVoice = (formData, roundType) => api.post(`/voice/transcribe?roundType=${roundType}`, formData, {

@@ -263,7 +263,7 @@ ROLE_TOPICS = {
 # ─── QUESTION GENERATION ──────────────────────────────────────────────────────
 
 GENERATE_PROMPT = ChatPromptTemplate.from_template("""
-You are Alex, a senior technical interviewer at TechWing — a professional AI interview platform.
+You are a senior technical interviewer at TechWing — a professional AI interview platform.
 You are interviewing a candidate for the role of: {role_name}
 
 The candidate's resume lists these technical skills: {resume_skills}
@@ -272,8 +272,8 @@ Core topics for this role that you MUST draw from for role-based questions:
 {role_topics}
 
 Generate exactly {count} technical interview questions following this strict structure:
-- Questions 1-5: Based ENTIRELY on the candidate's RESUME SKILLS above. Test depth of knowledge on what they claim to know. Ask about specific technologies from their resume.
-- Questions 6-10: Based ENTIRELY on the ROLE TOPICS above. Sample from different topic categories. Mix difficulties.
+- Half of the questions: Based ENTIRELY on the candidate's RESUME SKILLS above. Test depth of knowledge on what they claim to know. Ask about specific technologies from their resume.
+- Half of the questions: Based ENTIRELY on the ROLE TOPICS above. Sample from different topic categories. Mix difficulties.
 
 {randomness_constraint}
 
@@ -300,9 +300,9 @@ Return ONLY a valid JSON array with no markdown:
 def generate_technical_questions(role_name: str, resume_skills: list, count: int = 10) -> list:
     """
     Generate role-specific technical interview questions.
-    5 resume-based + 5 role-based questions for the given track.
     """
-    llm = get_llm()
+    from config import get_resume_llm
+    llm = get_resume_llm()
     chain = GENERATE_PROMPT | llm | StrOutputParser()
 
     # Get role-specific topics
@@ -360,7 +360,7 @@ def generate_technical_questions(role_name: str, resume_skills: list, count: int
 # ─── ANSWER EVALUATION ────────────────────────────────────────────────────────
 
 EVAL_PROMPT = ChatPromptTemplate.from_template("""
-You are Alex, an elite Senior Principal Engineer and technical interviewer at TechWing. 
+You are an elite Senior Principal Engineer and technical interviewer at TechWing. 
 You are conducting a live, real-time VOICE interview with a candidate. 
 Your goal is to act like a true engineering mentor and evaluator—deeply analytical, encouraging, and highly conversational.
 
@@ -384,7 +384,11 @@ Rules for generating 'feedback' (CRITICAL):
 2. BE A HUMAN MENTOR: Never use robotic openers like "Thank you", "Noted", or "Good answer." Speak naturally, e.g., "I really liked how you broke down the React component lifecycle, but one thing to keep in mind for production is..."
 3. HANDLE WRONG ANSWERS GRACEFULLY: If they get it completely wrong, or say "I don't know", DO NOT be condescending. Act like a supportive senior engineer. Say something like, "No worries at all, that's a pretty advanced concept. The main idea you should know is..."
 4. DEEP UNDERSTANDING: If their answer is technically correct but phrased poorly due to spoken English limitations, recognize the underlying correct logic and praise it. 
-5. NO REPETITION: Vary your vocabulary. Do not sound like a script.
+5. NEVER USE THE WORD "FUNNY": Do NOT use the word "funny", "laugh", or idioms like "funny you should mention that". It can be misinterpreted as mocking.
+6. NO ROBOTIC BEHAVIOR: Do not say things like "I am an AI". Act purely as a human senior engineer. Do not sound generic or scripted.
+6. HANDLE REPETITIONS: If the candidate says "repeat the question", "pardon", or "what did you say?", politely repeat or rephrase the question instead of evaluating them.
+7. HANDLE OFF-TOPIC: If the candidate says something completely off-topic or asks about irrelevant things, politely remind them that this is a technical interview and steer them back to the question.
+8. NO REPETITION: Vary your vocabulary. Do not sound like a script.
 """)
 
 def evaluate_answer(question_text: str, expected_answer: str,
@@ -402,6 +406,11 @@ def evaluate_answer(question_text: str, expected_answer: str,
         "technology": technology
     })
     raw = re.sub(r"```json|```", "", raw).strip()
+
+    # Robustly extract JSON block in case the LLM added conversational text
+    match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if match:
+        raw = match.group(0)
 
     try:
         result = json.loads(raw)

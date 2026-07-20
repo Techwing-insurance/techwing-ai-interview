@@ -36,12 +36,6 @@ public class User {
     @Column(name = "academic_year")
     private Integer year;
 
-    @Column(length = 15)
-    private String phone;
-
-    @Column(length = 200)
-    private String college;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

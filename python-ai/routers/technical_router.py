@@ -6,7 +6,7 @@ from services.stt_service import transcribe_audio
 router = APIRouter(prefix="/ai/technical", tags=["Technical AI"])
 
 @router.post("/generate-questions", response_model=QuestionGenerateResponse)
-async def generate_questions(request: QuestionGenerateRequest):
+def generate_questions(request: QuestionGenerateRequest):
     try:
         questions = generate_technical_questions(
             role_name=request.role_name,
@@ -18,7 +18,7 @@ async def generate_questions(request: QuestionGenerateRequest):
         raise HTTPException(status_code=500, detail=f"Question generation failed: {str(e)}")
 
 @router.post("/evaluate", response_model=TechnicalEvalResponse)
-async def evaluate(request: TechnicalEvalRequest):
+def evaluate(request: TechnicalEvalRequest):
     try:
         result = evaluate_answer(
             question_text=request.question_text,
@@ -31,9 +31,9 @@ async def evaluate(request: TechnicalEvalRequest):
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
 
 @router.post("/transcribe", response_model=STTResponse)
-async def transcribe(audio: UploadFile = File(...)):
+def transcribe(audio: UploadFile = File(...)):
     try:
-        audio_bytes = await audio.read()
+        audio_bytes = audio.file.read()
         result = transcribe_audio(audio_bytes, audio.filename)
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])

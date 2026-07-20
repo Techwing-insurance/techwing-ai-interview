@@ -237,7 +237,7 @@ const HrRoundPage = () => {
             // Speak welcome + first question
             setStatus(STATUS.AI_SPEAKING);
             await speak(
-                `Hello! Welcome to the HR Round. I'm Priya, your HR interviewer. ` +
+                `Hello! Welcome to the HR Round. I'm your HR interviewer. ` +
                 `This is a conversational round — please answer naturally and confidently. ` +
                 `Let's begin. ${data.questionText}`
             );

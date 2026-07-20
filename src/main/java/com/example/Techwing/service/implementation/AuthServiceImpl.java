@@ -30,7 +30,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
@@ -45,22 +44,22 @@ public class AuthServiceImpl implements AuthService {
     private long refreshTokenExpiry;
 
     @Override
+    @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new UserAlreadyExistsException("Email already registered: " + request.getEmail());
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw new UserAlreadyExistsException("Email already registered: " + normalizedEmail);
         }
         TechnologyTrack track = trackRepository.findById(request.getTrackId())
                 .orElseThrow(() -> new ResourceNotFoundException("TechnologyTrack", "id", request.getTrackId()));
 
         User user = User.builder()
                 .name(request.getName())
-                .email(request.getEmail())
+                .email(normalizedEmail)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .branch(request.getBranch())
                 .pinNumber(request.getPinNumber())
                 .year(request.getYear())
-                .phone(request.getPhone())
-                .college(request.getCollege())
                 .track(track)
                 .build();
         user = userRepository.save(user);
@@ -71,21 +70,22 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Email is not registered. Please create an account first."));
-
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new org.springframework.security.authentication.BadCredentialsException("Incorrect password");
-        }
-
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        
+        // Let AuthenticationManager handle the password check to avoid double hashing (which is slow and exhausts connections)
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+                new UsernamePasswordAuthenticationToken(normalizedEmail, request.getPassword()));
                 
+        // Fetch user only after successful authentication
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Email is not registered."));
+
         log.info("User logged in: {}", user.getEmail());
         return buildAuthResponse(user);
     }
 
     @Override
+    @Transactional
     public AuthResponse refreshToken(String token) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
                 .orElseThrow(() -> new InvalidTokenException("Refresh token not found"));
@@ -97,6 +97,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public void logout(String token) {
         refreshTokenRepository.deleteByToken(token);
     }
@@ -107,7 +108,8 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
     }
 
-    private AuthResponse buildAuthResponse(User user) {
+    @Transactional
+    protected AuthResponse buildAuthResponse(User user) {
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
         String accessToken = jwtService.generateAccessToken(userDetails);
         String refreshTokenValue = UUID.randomUUID().toString();

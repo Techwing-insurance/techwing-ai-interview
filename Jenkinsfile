@@ -2,8 +2,7 @@ pipeline {
     agent any
 
     environment {
-        TOMCAT_URL  = 'http://localhost:8081'
-        TOMCAT_HOME = '/root/apache-tomcat-10.1.56'
+        TOMCAT_URL  = 'http://localhost:8080'
         NGINX_ROOT  = '/var/www/techwing'
     }
 
@@ -25,11 +24,9 @@ pipeline {
         stage('Deploy Backend to Tomcat') {
             steps {
                 sh '''
-                    ${TOMCAT_HOME}/bin/shutdown.sh || true
-                    sleep 5
-                    sudo cp target/*.war ${TOMCAT_HOME}/webapps/ROOT.war
-                    ${TOMCAT_HOME}/bin/startup.sh
-                    sleep 10
+                    sudo systemctl stop tomcat || true
+                    sudo cp target/*.war /opt/tomcat/webapps/ROOT.war
+                    sudo systemctl start tomcat
                 '''
             }
         }
@@ -38,7 +35,6 @@ pipeline {
             steps {
                 dir('frontend') {
                     sh '''
-                        export PATH=$PATH:/usr/bin
                         npm install
                         npm run build
                     '''
@@ -62,7 +58,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Deployment complete! https://techwing-ai-interview.duckdns.org'
+            echo '✅ Deployment complete! https://techwingai.duckdns.org'
         }
         failure {
             echo '❌ Build failed. Check logs above.'

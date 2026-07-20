@@ -13,7 +13,6 @@ public class StudentProfileDTO {
     private String pinNumber;
     private String year;
     private String branch;
-    private String college;
     
     private Integer totalInterviews;
     private Double averageOverallScore;

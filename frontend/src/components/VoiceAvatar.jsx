@@ -16,9 +16,9 @@ const VoiceAvatar = ({ isListening, isSpeaking, isProcessing, volume = 0, onStar
                 
                 {/* Avatar Image container */}
                 <div 
-                    style={{ transform: `scale(${scale})`, transition: 'transform 0.05s ease-out' }}
+                    style={isListening ? { transform: `scale(${scale})`, transition: 'transform 0.05s ease-out' } : undefined}
                     className={`relative w-48 h-48 rounded-full overflow-hidden border-4 z-10 
-                    ${isListening ? 'border-techwing-orange' : isSpeaking ? 'border-techwing-gold' : 'border-white/10'}`}>
+                    ${isListening ? 'border-techwing-orange' : isSpeaking ? 'border-techwing-gold animate-speaking-pulse' : 'border-white/10'}`}>
                     
                     <img 
                         src="/src/assets/avatar.jpeg" 
@@ -46,31 +46,6 @@ const VoiceAvatar = ({ isListening, isSpeaking, isProcessing, volume = 0, onStar
                     )}
                 </div>
             </div>
-
-            <div className="flex items-center gap-4">
-                {!isListening ? (
-                    <button 
-                        onClick={onStartListening}
-                        disabled={isProcessing || isSpeaking}
-                        className="btn-primary rounded-full w-16 h-16 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Start Speaking"
-                    >
-                        <Mic className="w-6 h-6" />
-                    </button>
-                ) : (
-                    <button 
-                        onClick={onStopListening}
-                        className="bg-red-500 hover:bg-red-600 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-[0_0_15px_rgba(239,68,68,0.5)] transition-all"
-                        title="Stop Speaking"
-                    >
-                        <MicOff className="w-6 h-6" />
-                    </button>
-                )}
-            </div>
-            
-            <p className="mt-4 text-sm font-medium h-6 text-gray-300">
-                {isListening ? "Listening..." : isProcessing ? "Thinking..." : isSpeaking ? "Speaking..." : "Tap mic to speak"}
-            </p>
         </div>
     );
 };

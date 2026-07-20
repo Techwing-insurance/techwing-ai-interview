@@ -193,7 +193,6 @@ public class AdminController {
                 .pinNumber(user.getPinNumber())
                 .year(user.getYear())
                 .branch(user.getBranch())
-                .college(user.getCollege())
                 .build();
 
         sessionRepository.findTopByUserIdOrderByCreatedAtDesc(user.getId()).ifPresent(session -> {
@@ -248,7 +247,6 @@ public class AdminController {
                 .pinNumber(user.getPinNumber())
                 .year(user.getYear() != null ? String.valueOf(user.getYear()) : null)
                 .branch(user.getBranch())
-                .college(user.getCollege())
                 .totalInterviews(reportDTOs.size())
                 .averageOverallScore(averageScore)
                 .pastReports(reportDTOs)

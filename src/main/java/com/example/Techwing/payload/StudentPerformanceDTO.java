@@ -18,7 +18,6 @@ public class StudentPerformanceDTO {
     private String pinNumber;
     private Integer year;
     private String branch;
-    private String college;
     
     private Long latestSessionId;
     private String trackName;

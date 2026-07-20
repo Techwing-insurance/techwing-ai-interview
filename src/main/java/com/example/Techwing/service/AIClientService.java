@@ -24,7 +24,7 @@ import java.util.Map;
 @Slf4j
 public class AIClientService {
 
-    @Value("${ai.service.base-url:http://localhost:8000}")
+    @Value("${ai.service.base-url:https://techwing-python-ai.onrender.com}")
     private String aiBaseUrl;
 
     private final RestTemplate restTemplate;
