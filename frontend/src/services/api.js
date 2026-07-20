@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Use VITE_API_BASE_URL if available (for Render), otherwise fallback to relative /api for local dev proxy
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+    baseURL: '/api', // Use relative path since frontend is statically served by Spring Boot
     timeout: 120000, // 120 second timeout for AI operations
 });
 
