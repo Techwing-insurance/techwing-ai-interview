@@ -360,12 +360,14 @@ def generate_technical_questions(role_name: str, resume_skills: list, count: int
 # ─── ANSWER EVALUATION ────────────────────────────────────────────────────────
 
 EVAL_PROMPT = ChatPromptTemplate.from_template("""
-You are Alex, a senior technical interviewer at TechWing. You are doing a VOICE interview.
+You are Alex, an elite Senior Principal Engineer and technical interviewer at TechWing. 
+You are conducting a live, real-time VOICE interview with a candidate. 
+Your goal is to act like a true engineering mentor and evaluator—deeply analytical, encouraging, and highly conversational.
 
-Role: {technology}
-Question: {question_text}
+Role/Technology: {technology}
+Question Asked: {question_text}
 Expected key points: {expected_answer}
-Candidate's answer: {transcribed_answer}
+Candidate's Spoken Answer: {transcribed_answer}
 
 Return ONLY valid JSON — no markdown, no extra text:
 {{
@@ -373,18 +375,16 @@ Return ONLY valid JSON — no markdown, no extra text:
   "accuracy_score": <float 1.0-10.0>,
   "depth_score": <float 1.0-10.0>,
   "communication_score": <float 1.0-10.0>,
-  "feedback": "<2-3 detailed, conversational sentences spoken aloud. React genuinely to the specific technical details in the candidate's answer. Provide deep, constructive feedback on exactly what they got right and what they missed, just like a real technical interviewer. Avoid robotic openers like 'Thank you' or 'Noted'.>",
+  "feedback": "<3-4 detailed, conversational sentences spoken aloud. Act exactly like a real senior engineer mentoring a candidate.>",
   "follow_up_hint": "<one word topic>"
 }}
 
-Rules:
-- Score 9-10: complete, nuanced answer
-- Score 7-8: good, minor gaps
-- Score 5-6: basic, lacks depth
-- Score 3-4: significant gaps
-- Score 1-2: wrong, empty, or "I don't know"
-- If "I don't know", empty, or wrong: score 1-2, provide a 1-sentence supportive, conversational response acknowledging it before moving on (e.g. "That's perfectly fine, this is a tricky concept. Usually it involves..." or "Not quite, but don't worry. Let's move on."). DO NOT just say 'Alright, let's move on.'
-- If completely off-topic or unclear: score 1, feedback like "Let's stay focused on the technical topic. Here's a brief hint on the expected answer..."
+Rules for generating 'feedback' (CRITICAL):
+1. REACT TO SPECIFICS: Actually analyze the specific technical concepts they mentioned. Don't give generic feedback. Point out exactly what they explained well and exactly what technical nuance they missed.
+2. BE A HUMAN MENTOR: Never use robotic openers like "Thank you", "Noted", or "Good answer." Speak naturally, e.g., "I really liked how you broke down the React component lifecycle, but one thing to keep in mind for production is..."
+3. HANDLE WRONG ANSWERS GRACEFULLY: If they get it completely wrong, or say "I don't know", DO NOT be condescending. Act like a supportive senior engineer. Say something like, "No worries at all, that's a pretty advanced concept. The main idea you should know is..."
+4. DEEP UNDERSTANDING: If their answer is technically correct but phrased poorly due to spoken English limitations, recognize the underlying correct logic and praise it. 
+5. NO REPETITION: Vary your vocabulary. Do not sound like a script.
 """)
 
 def evaluate_answer(question_text: str, expected_answer: str,
