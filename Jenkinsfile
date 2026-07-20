@@ -35,6 +35,7 @@ pipeline {
             steps {
                 dir('frontend') {
                     sh '''
+                        export PATH=$PATH:/usr/bin
                         npm install
                         npm run build
                     '''
@@ -58,7 +59,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Deployment complete! https://techwingai.duckdns.org'
+            echo '✅ Deployment complete! https://techwing-ai-interview.duckdns.org'
         }
         failure {
             echo '❌ Build failed. Check logs above.'
