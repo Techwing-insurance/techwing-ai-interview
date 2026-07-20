@@ -3,19 +3,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-LLM_PROVIDER   = os.getenv("LLM_PROVIDER", "groq")
-LLM_MODEL      = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-GROQ_API_KEY   = os.getenv("GROQ_API_KEY", "")
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "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")
 
 def get_llm():
-    if LLM_PROVIDER == "openai":
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(model=LLM_MODEL, api_key=OPENAI_API_KEY, temperature=0.3)
-    elif LLM_PROVIDER == "groq":
-        from langchain_groq import ChatGroq
-        return ChatGroq(model=LLM_MODEL, groq_api_key=GROQ_API_KEY, temperature=0.3)
-    else:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=GOOGLE_API_KEY, temperature=0.3)
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(
+        model="meta/llama-3.3-70b-instruct", 
+        api_key=NVIDIA_API_KEY, 
+        base_url="https://integrate.api.nvidia.com/v1",
+        temperature=0.2,
+        max_tokens=1024
+    )
