@@ -69,6 +69,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
         
