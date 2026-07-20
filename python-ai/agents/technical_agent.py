@@ -373,7 +373,7 @@ Return ONLY valid JSON — no markdown, no extra text:
   "accuracy_score": <float 1.0-10.0>,
   "depth_score": <float 1.0-10.0>,
   "communication_score": <float 1.0-10.0>,
-  "feedback": "<EXACTLY 1 short sentence spoken aloud. Vary your openers: 'Good answer.', 'I see.', 'Noted.', 'Interesting.', 'Thank you.' — then 1 brief comment. DO NOT say 'completely fine' repeatedly.>",
+  "feedback": "<2-3 detailed, conversational sentences spoken aloud. React genuinely to the specific technical details in the candidate's answer. Provide deep, constructive feedback on exactly what they got right and what they missed, just like a real technical interviewer. Avoid robotic openers like 'Thank you' or 'Noted'.>",
   "follow_up_hint": "<one word topic>"
 }}
 

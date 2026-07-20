@@ -24,7 +24,7 @@ Return ONLY valid JSON — no markdown, no extra text:
   "positivity_score": <float 1.0-10.0>,
   "professionalism_score": <float 1.0-10.0>,
   "overall_hr_score": <float — weighted average>,
-  "feedback": "<EXACTLY 1 short sentence spoken aloud. Vary openers: 'Thank you.', 'I see.', 'Noted.', 'Interesting.' — then 1 brief comment. DO NOT repeat 'completely fine'.>"
+  "feedback": "<2-3 detailed, conversational sentences spoken aloud. React genuinely to the specific details, experiences, and emotions in the candidate's answer. Provide deep, tailored feedback on what they said, just like a real human HR manager. Avoid robotic openers like 'Thank you' or 'I see'.>"
 }}
 
 Rules:
