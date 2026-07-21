@@ -21,6 +21,29 @@ pipeline {
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonar') {
+                    sh '''
+                        mvn sonar:sonar \
+                            -Dsonar.projectKey=techwing-ai-interview \
+                            -Dsonar.projectName="Techwing AI Interview" \
+                            -Dsonar.java.binaries=target/classes \
+                            -Dsonar.coverage.exclusions=**/* \
+                            -Dsonar.cpd.exclusions=**/*
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false
+                }
+            }
+        }
+
         stage('Deploy Backend to Tomcat') {
             steps {
                 sh '''
