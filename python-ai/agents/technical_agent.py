@@ -4,7 +4,9 @@ Supports 5 tracks: Java Full Stack, MERN Stack, AWS Cloud, DevOps, Generative AI
 """
 import json
 import re
-import random
+import secrets
+
+_rng = secrets.SystemRandom()  # Cryptographically secure RNG (fixes SonarQube S2245)
 from config import get_llm
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -310,15 +312,15 @@ def generate_technical_questions(role_name: str, resume_skills: list, count: int
     all_topics = []
     for category, topics in role_config.items():
         # Pick a random subset from each category for variety
-        sampled = random.sample(topics, min(3, len(topics)))
+        sampled = _rng.sample(topics, min(3, len(topics)))
         for t in sampled:
             all_topics.append(f"[{category}] {t}")
 
-    random.shuffle(all_topics)
+    _rng.shuffle(all_topics)
     role_topics_str = "\n".join(f"  - {t}" for t in all_topics)
     
     # Shuffle resume skills as well so the LLM doesn't always see them in the same order
-    random.shuffle(resume_skills)
+    _rng.shuffle(resume_skills)
     skills_str = ", ".join(resume_skills[:12]) if resume_skills else "General technical skills"
 
     random_constraints = [
@@ -328,7 +330,7 @@ def generate_technical_questions(role_name: str, resume_skills: list, count: int
         "CRITICAL: Focus the very first question on performance optimization and trade-offs.",
         "CRITICAL: Ensure the questions are highly varied and completely different from a standard boilerplate interview. Shuffle the order!"
     ]
-    randomness_constraint = random.choice(random_constraints)
+    randomness_constraint = _rng.choice(random_constraints)
 
     raw = chain.invoke({
         "role_name": role_name,
