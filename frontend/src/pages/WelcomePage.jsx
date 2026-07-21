@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mic, Code, FileText, ArrowRight } from 'lucide-react';
+import logoImg from '../assets/logo.png';
 
 const WelcomePage = () => {
     const navigate = useNavigate();
@@ -20,7 +21,7 @@ const WelcomePage = () => {
             >
                 {/* Logo Area */}
                 <div className="mb-8 flex justify-center">
-                    <img src="/src/assets/logo.png" alt="TechWing" className="h-16 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/200x80/0a0a0a/CAA928?text=TECHWING' }} />
+                    <img src={logoImg} alt="TechWing" className="h-16 object-contain" />
                 </div>
 
                 <h1 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight">
