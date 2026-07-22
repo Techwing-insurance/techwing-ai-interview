@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Maven settings.xml for Nexus Integration
+  Place this file at: /var/lib/jenkins/.m2/settings.xml on your EC2 instance
+  Command: sudo cp maven-settings.xml /var/lib/jenkins/.m2/settings.xml
+           sudo chown jenkins:jenkins /var/lib/jenkins/.m2/settings.xml
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+          https://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <!--
+        Nexus Credentials
+        The id values MUST match the id in pom.xml distributionManagement
+    -->
+    <servers>
+        <server>
+            <id>nexus-releases</id>
+            <username>admin</username>
+            <password>YOUR_NEXUS_PASSWORD</password>
+        </server>
+        <server>
+            <id>nexus-snapshots</id>
+            <username>admin</username>
+            <password>YOUR_NEXUS_PASSWORD</password>
+        </server>
+    </servers>
+
+    <!--
+        Mirror: Route all Maven Central requests through Nexus proxy
+        This caches dependencies in Nexus, speeding up future builds.
+    -->
+    <mirrors>
+        <mirror>
+            <id>nexus-central-proxy</id>
+            <mirrorOf>central</mirrorOf>
+            <name>Nexus Central Proxy</name>
+            <url>http://localhost:8085/repository/maven-central/</url>
+        </mirror>
+    </mirrors>
+
+    <profiles>
+        <profile>
+            <id>nexus</id>
+            <repositories>
+                <repository>
+                    <id>nexus-releases</id>
+                    <url>http://localhost:8085/repository/techwing-releases/</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                </repository>
+            </repositories>
+        </profile>
+    </profiles>
+
+    <activeProfiles>
+        <activeProfile>nexus</activeProfile>
+    </activeProfiles>
+
+</settings>
