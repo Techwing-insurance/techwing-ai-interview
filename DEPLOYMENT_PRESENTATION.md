@@ -52,25 +52,54 @@ graph TD
 
 ---
 
-## Slide 4: Control Flow Breakdown (Step-by-Step)
+## Slide 4: Control Flow Diagram (Sequence)
 **Heading:** How Control Moves Through the Pipeline
 
-**1. Trigger Phase (GitHub ➡️ Jenkins)**
-*   A developer pushes code to the `main` branch.
-*   GitHub sends a JSON payload via a Webhook to Jenkins.
-*   Jenkins acknowledges the trigger and initiates a new build job.
+*(Copy this diagram or create a visual sequence diagram in PPT based on it)*
 
-**2. Build & Analyze Phase (Jenkins ➡️ Maven ➡️ SonarQube)**
-*   Jenkins clones the latest codebase into its workspace.
-*   Jenkins invokes Maven to compile the Java backend, skipping tests to optimize speed, generating `ROOT.war`.
-*   Control passes to the SonarScanner plugin, which reads the compiled code and pushes it to the SonarQube server via port `9000`.
-*   The pipeline halts momentarily to wait for SonarQube's Quality Gate result.
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Git as GitHub (main)
+    participant Jnk as Jenkins CI/CD
+    participant Mvn as Maven (Build)
+    participant Sq as SonarQube (9000)
+    participant Nx as Nexus (8085)
+    participant EC2 as Target EC2 (Tomcat/Nginx)
 
-**3. Storage & Deployment Phase (Jenkins ➡️ Nexus ➡️ Tomcat/Nginx)**
-*   If the Quality Gate passes (or is configured to warn only), control moves to the Nexus Artifact Uploader.
-*   Jenkins pushes `ROOT.war` over HTTP to Nexus (port `8085`) into the `techwing-releases` repository.
-*   **Backend Deploy:** Jenkins executes shell commands on the EC2 instance to stop Tomcat, fetch the exact versioned `.war` from Nexus, place it in `webapps/`, and restart Tomcat.
-*   **Frontend Deploy:** Jenkins shifts context to the `frontend` directory, runs `npm install` and `npm run build`, then copies the generated static assets to `/var/www/techwing`, concluding by reloading Nginx.
+    %% 1. Trigger Phase
+    Note over Dev,Jnk: 1. Trigger Phase
+    Dev->>Git: git push (code updates)
+    Git-->>Jnk: Webhook Trigger (JSON Payload)
+    
+    %% 2. Build & Analyze Phase
+    Note over Jnk,Sq: 2. Build & Analyze Phase
+    Jnk->>Jnk: Clone latest codebase
+    Jnk->>Mvn: Compile & Package (skip tests)
+    Mvn-->>Jnk: Output: ROOT.war
+    Jnk->>Sq: Push code for analysis (SonarScanner)
+    Sq-->>Jnk: Return Quality Gate Status (Wait)
+    
+    %% 3. Storage & Deployment Phase
+    Note over Jnk,EC2: 3. Storage & Deployment Phase
+    alt Quality Gate Fails
+        Jnk-->>Dev: Pipeline Aborts / Fails
+    else Quality Gate Passes
+        Jnk->>Nx: Upload ROOT.war (Versioned)
+        Nx-->>Jnk: Artifact Stored Successfully
+        
+        %% Backend Deploy
+        Jnk->>EC2: Stop Tomcat
+        Jnk->>Nx: Download latest ROOT.war
+        Nx-->>EC2: Transfer ROOT.war to webapps/
+        Jnk->>EC2: Start Tomcat (Backend Live)
+        
+        %% Frontend Deploy
+        Jnk->>Jnk: Build React App (npm install & run build)
+        Jnk->>EC2: Copy static files to /var/www/techwing
+        Jnk->>EC2: Reload Nginx (Frontend Live)
+    end
+```
 
 ---
 
