@@ -18,12 +18,12 @@
         <server>
             <id>nexus-releases</id>
             <username>admin</username>
-            <password>YOUR_NEXUS_PASSWORD</password>
+            <password>${env.NEXUS_PASSWORD}</password>
         </server>
         <server>
             <id>nexus-snapshots</id>
             <username>admin</username>
-            <password>YOUR_NEXUS_PASSWORD</password>
+            <password>${env.NEXUS_PASSWORD}</password>
         </server>
     </servers>
 
