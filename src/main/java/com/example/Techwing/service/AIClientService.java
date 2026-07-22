@@ -1,5 +1,6 @@
 package com.example.Techwing.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -10,9 +11,11 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,6 +26,17 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class AIClientService {
+
+    private static final String ENDPOINT_RESUME_ANALYZE = "/ai/resume/analyze";
+    private static final String ENDPOINT_HR_TRANSCRIBE = "/ai/hr/transcribe";
+    private static final String ENDPOINT_TECH_TRANSCRIBE = "/ai/technical/transcribe";
+    private static final String ENDPOINT_TECH_EVALUATE = "/ai/technical/evaluate";
+    private static final String ENDPOINT_TECH_GENERATE = "/ai/technical/generate-questions";
+    private static final String ENDPOINT_HR_EVALUATE = "/ai/hr/evaluate";
+    private static final String ENDPOINT_REPORT_GENERATE = "/ai/report/generate";
+    private static final String ENDPOINT_TTS_GENERATE = "/ai/tts/generate";
+    private static final String ENDPOINT_HEALTH = "/health";
+    private static final String HR_ROUND_TYPE = "HR";
 
     @Value("${ai.service.base-url:https://techwing-ai-interview.onrender.com}")
     private String aiBaseUrl;
@@ -42,12 +56,12 @@ public class AIClientService {
             HttpHeaders headers = jsonHeaders();
             HttpEntity<String> req = new HttpEntity<>(objectMapper.writeValueAsString(payload), headers);
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
-                    aiBaseUrl + "/ai/resume/analyze", HttpMethod.POST, req, JsonNode.class);
+                    aiBaseUrl + ENDPOINT_RESUME_ANALYZE, HttpMethod.POST, req, JsonNode.class);
             log.info("Resume AI analysis completed for user: {}", userId);
             return resp.getBody();
-        } catch (Exception e) {
+        } catch (RestClientException | JsonProcessingException e) {
             log.error("Resume AI analysis failed: {}", e.getMessage());
-            return null;
+            return objectMapper.createObjectNode();
         }
     }
 
@@ -64,9 +78,9 @@ public class AIClientService {
             };
             body.add("audio", resource);
 
-            String endpoint = roundType.equalsIgnoreCase("HR")
-                    ? "/ai/hr/transcribe"
-                    : "/ai/technical/transcribe";
+            String endpoint = HR_ROUND_TYPE.equalsIgnoreCase(roundType)
+                    ? ENDPOINT_HR_TRANSCRIBE
+                    : ENDPOINT_TECH_TRANSCRIBE;
 
             HttpEntity<MultiValueMap<String, Object>> req = new HttpEntity<>(body, headers);
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
@@ -75,7 +89,7 @@ public class AIClientService {
             if (resp.getBody() != null && resp.getBody().has("transcript")) {
                 return resp.getBody().get("transcript").asText("");
             }
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             log.error("STT transcription failed: {}", e.getMessage());
         }
         return "";
@@ -95,15 +109,15 @@ public class AIClientService {
             HttpHeaders headers = jsonHeaders();
             HttpEntity<String> req = new HttpEntity<>(objectMapper.writeValueAsString(payload), headers);
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
-                    aiBaseUrl + "/ai/technical/evaluate", HttpMethod.POST, req, JsonNode.class);
+                    aiBaseUrl + ENDPOINT_TECH_EVALUATE, HttpMethod.POST, req, JsonNode.class);
             return resp.getBody();
-        } catch (Exception e) {
+        } catch (RestClientException | JsonProcessingException e) {
             log.error("Technical evaluation failed: {}", e.getMessage());
-            return null;
+            return objectMapper.createObjectNode();
         }
     }
 
-    public JsonNode generateTechnicalQuestions(String roleName, java.util.List<String> resumeSkills, int count) {
+    public JsonNode generateTechnicalQuestions(String roleName, List<String> resumeSkills, int count) {
         try {
             Map<String, Object> payload = new HashMap<>();
             payload.put("role_name", roleName);
@@ -113,11 +127,11 @@ public class AIClientService {
             HttpHeaders headers = jsonHeaders();
             HttpEntity<String> req = new HttpEntity<>(objectMapper.writeValueAsString(payload), headers);
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
-                    aiBaseUrl + "/ai/technical/generate-questions", HttpMethod.POST, req, JsonNode.class);
+                    aiBaseUrl + ENDPOINT_TECH_GENERATE, HttpMethod.POST, req, JsonNode.class);
             return resp.getBody();
-        } catch (Exception e) {
+        } catch (RestClientException | JsonProcessingException e) {
             log.error("Technical question generation failed: {}", e.getMessage());
-            return null;
+            return objectMapper.createObjectNode();
         }
     }
 
@@ -132,11 +146,11 @@ public class AIClientService {
             HttpHeaders headers = jsonHeaders();
             HttpEntity<String> req = new HttpEntity<>(objectMapper.writeValueAsString(payload), headers);
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
-                    aiBaseUrl + "/ai/hr/evaluate", HttpMethod.POST, req, JsonNode.class);
+                    aiBaseUrl + ENDPOINT_HR_EVALUATE, HttpMethod.POST, req, JsonNode.class);
             return resp.getBody();
-        } catch (Exception e) {
+        } catch (RestClientException | JsonProcessingException e) {
             log.error("HR evaluation failed: {}", e.getMessage());
-            return null;
+            return objectMapper.createObjectNode();
         }
     }
 
@@ -147,12 +161,12 @@ public class AIClientService {
             HttpHeaders headers = jsonHeaders();
             HttpEntity<String> req = new HttpEntity<>(objectMapper.writeValueAsString(reportData), headers);
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
-                    aiBaseUrl + "/ai/report/generate", HttpMethod.POST, req, JsonNode.class);
+                    aiBaseUrl + ENDPOINT_REPORT_GENERATE, HttpMethod.POST, req, JsonNode.class);
             log.info("AI report generated for session: {}", reportData.get("session_id"));
             return resp.getBody();
-        } catch (Exception e) {
+        } catch (RestClientException | JsonProcessingException e) {
             log.error("AI report generation failed: {}", e.getMessage());
-            return null;
+            return objectMapper.createObjectNode();
         }
     }
 
@@ -165,13 +179,13 @@ public class AIClientService {
             payload.put("voice", voice != null ? voice : "nova");
 
             HttpHeaders headers = jsonHeaders();
-            headers.setAccept(java.util.List.of(MediaType.APPLICATION_OCTET_STREAM));
+            headers.setAccept(List.of(MediaType.APPLICATION_OCTET_STREAM));
             HttpEntity<String> req = new HttpEntity<>(objectMapper.writeValueAsString(payload), headers);
 
             ResponseEntity<byte[]> resp = restTemplate.exchange(
-                    aiBaseUrl + "/ai/tts/generate", HttpMethod.POST, req, byte[].class);
+                    aiBaseUrl + ENDPOINT_TTS_GENERATE, HttpMethod.POST, req, byte[].class);
             return resp.getBody();
-        } catch (Exception e) {
+        } catch (RestClientException | JsonProcessingException e) {
             log.error("TTS generation failed: {}", e.getMessage());
             return new byte[0];
         }
@@ -181,9 +195,9 @@ public class AIClientService {
 
     public boolean isAIServiceHealthy() {
         try {
-            ResponseEntity<JsonNode> resp = restTemplate.getForEntity(aiBaseUrl + "/health", JsonNode.class);
+            ResponseEntity<JsonNode> resp = restTemplate.getForEntity(aiBaseUrl + ENDPOINT_HEALTH, JsonNode.class);
             return resp.getStatusCode().is2xxSuccessful();
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             log.warn("AI service is not reachable: {}", e.getMessage());
             return false;
         }
